@@ -5,3 +5,4 @@ out/*.db
 out/*.db-wal
 out/*.db-shm
 .pytest_cache/
+application/
