@@ -55,10 +55,11 @@ actually scored.
 on public data with the evidence public data can supply. Every disposition
 carries a written rationale; see `cases/` for worked investigation files.
 
-> **These figures supersede two earlier runs.** Two rounds of adversarial
-> self-review found twelve defects, including two controls whose central
+> **These figures supersede two earlier runs.** Three rounds of adversarial
+> self-review found seventeen defects, including two controls whose central
 > computation was invalid and one published statistic the code did not produce.
-> All are listed under **Corrections** below.
+> All are listed under **Corrections** below, including one claimed defect that
+> did not survive checking.
 
 ## What the run actually established
 
@@ -129,6 +130,18 @@ carries each fix.
 | C1's coverage was undisclosed | 339 of 408 markets skipped silently | `coverage()` reports every skip reason and is printed by the runner |
 | C3's selectivity was misattributed | ~581 of 11,625 periods clear the 95th percentile by construction; 13 alerts survive | Documented that persistence, not the percentile, is what selects |
 
+**Third review round** — no result changed, but three of these would have bitten later.
+
+| Defect | Effect | Fix |
+|---|---|---|
+| `_paginate` had no termination guard | An endpoint echoing one cursor with a non-empty batch loops forever accumulating duplicates. The test written to prove this **hung the suite** | Repeated-cursor detection and a 200-page cap |
+| Settlement market counts were frozen at inventory time | Figures went stale as markets were ingested; the 76% headline is computed from them | Counted by join at report time |
+| Nothing verified ladder settlement consistency | A `greater` ladder settling NO below a strike that settled YES is impossible and would be a settlement failure, not a pricing quirk | C5 now checks it (0 contradictions across 9 settled events) |
+| C4 silently filtered `strike_type = 'greater'` | All 408 markets here are `greater`, so no live gap — but other types would be dropped without disclosure | Disclosed as a scope limit |
+| C3 percentile self-inclusion | A ticker contributes up to 5.4% of its own tier null | Measured and documented; bounded enough not to restructure |
+
+One claimed defect did **not** survive checking: I asserted `concentration()` double-counted markets across sources. Per-source figures are coverage and legitimately overlap — the assertion was wrong. The real issue was the staleness above, and that per-source counts happen to sum to 408 here only because every series declares one source.
+
 ## Pre-registration
 
 Every free parameter is frozen in `config/params.yaml`, hashed, and recorded in
@@ -141,7 +154,7 @@ against tuning thresholds until the alerts tell the story you wanted. See
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/pytest -q                                   # 86 tests
+.venv/bin/pytest -q                                   # 92 tests
 PYTHONPATH=src .venv/bin/python -m kxsurv.cli         # ingest + run all controls
 ```
 
