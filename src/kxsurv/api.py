@@ -47,10 +47,18 @@ class KalshiPublic:
         raise RuntimeError("Kalshi unavailable after {} attempts: {}".format(
             self._max_attempts, path))
 
-    def _paginate(self, path: str, key: str, params: dict) -> list[dict]:
+    def _paginate(self, path: str, key: str, params: dict,
+                  max_pages: int = 200) -> list[dict]:
+        """Follow cursors to exhaustion, with two termination guards.
+
+        An endpoint echoing the same cursor alongside a non-empty batch would
+        otherwise spin forever accumulating duplicates, and an endpoint issuing
+        endlessly fresh cursors would never return.
+        """
         out: list[dict] = []
         cursor = ""
-        while True:
+        seen: set[str] = set()
+        for _ in range(max_pages):
             p = dict(params)
             if cursor:
                 p["cursor"] = cursor
@@ -58,8 +66,10 @@ class KalshiPublic:
             batch = d.get(key, []) or []
             out.extend(batch)
             cursor = d.get("cursor", "") or ""
-            if not cursor or not batch:
+            if not cursor or not batch or cursor in seen:
                 return out
+            seen.add(cursor)
+        return out
 
     def series(self, ticker: str) -> dict:
         return self._get("/series/" + ticker).get("series", {})

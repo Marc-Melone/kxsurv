@@ -54,3 +54,24 @@ def test_client_never_sends_auth_headers():
     keys = {k.lower() for k in c._session.headers}
     assert "authorization" not in keys
     assert not any("key" in k for k in keys)
+
+
+def test_pagination_stops_on_a_repeated_cursor(monkeypatch):
+    """_paginate looped while a cursor was returned. An endpoint echoing the
+    same cursor with a non-empty batch would spin forever accumulating
+    duplicates."""
+    def fake_get(self, path, params=None):
+        return {"trades": [{"trade_id": "a"}], "cursor": "STUCK"}
+    monkeypatch.setattr(KalshiPublic, "_get", fake_get)
+    out = KalshiPublic().trades(ticker="K1")
+    assert len(out) < 50, "a repeated cursor must terminate the loop"
+
+
+def test_pagination_is_capped(monkeypatch):
+    n = {"i": 0}
+    def fake_get(self, path, params=None):
+        n["i"] += 1
+        return {"trades": [{"trade_id": str(n["i"])}], "cursor": "c{}".format(n["i"])}
+    monkeypatch.setattr(KalshiPublic, "_get", fake_get)
+    out = KalshiPublic().trades(ticker="K1")
+    assert len(out) <= 1000, "unbounded pagination must be capped"
