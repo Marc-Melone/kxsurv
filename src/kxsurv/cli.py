@@ -11,6 +11,7 @@ from .db import connect, init_schema
 from .events import build_events
 from .ingest import ingest_series
 from .params import load_params, register
+from .controls.c1_prerelease import coverage
 from .report import funnel_markdown
 
 SERIES = ["KXCPI", "KXCPIYOY", "KXPAYROLLS", "KXU3", "KXFED"]
@@ -35,6 +36,8 @@ def main(skip_ingest: bool = False) -> int:
         alerts = run_control(conn, mod, params)
         print("{}: {} alerts".format(mod.CONTROL_ID, len(alerts)), flush=True)
 
+    print()
+    print("C1 coverage:", coverage(conn, params))
     print()
     print(funnel_markdown(conn))
     return 0

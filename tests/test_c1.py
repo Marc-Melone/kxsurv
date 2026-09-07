@@ -103,3 +103,29 @@ def test_planted_informed_flow_fires_the_control(conn):
 def test_matched_clean_tape_does_not_fire(conn):
     _setup(conn, informed=False)
     assert run(conn, P1) == [], "balanced flow must not alert"
+
+
+# --- coverage funnel (added 2026-09-07 second review) ----------------------
+# The published rate "4/77 = 5.2%" was computed by an ad-hoc script using a
+# different filter than the control's own pipeline. The real denominator is the
+# number of markets C1 actually scores, and it must come from the control.
+
+from kxsurv.controls.c1_prerelease import coverage
+
+
+def test_coverage_accounts_for_every_market_considered(conn):
+    _setup(conn, informed=True)
+    cov = coverage(conn, P1)
+    assert cov["scored"] == 1
+    assert sum(cov[k] for k in
+               ("no_result", "gate_blocked", "low_volume", "no_p0",
+                "null_too_small", "scored")) == cov["considered"]
+
+
+def test_unsettled_markets_are_reported_not_silently_dropped(conn):
+    _setup(conn, informed=True)
+    upsert_markets(conn, [market("KXCPI-26AUG-T2", "KXCPI-26AUG", 2.0,
+                                 status="active", result="", close_time=HALT)])
+    cov = coverage(conn, P1)
+    assert cov["no_result"] == 1
+    assert cov["scored"] == 1
