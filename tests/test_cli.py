@@ -57,7 +57,16 @@ def test_skip_ingest_runs_locally_without_constructing_an_api_client(conn, monke
     monkeypatch.setattr(cli, "load_params", lambda _: params)
     monkeypatch.setattr(cli, "connect", lambda _: conn)
     monkeypatch.setattr(cli, "KalshiPublic", forbid_api)
-    monkeypatch.setattr(cli, "CONTROLS", [])
+    # One trivial control, not an empty list: a run that executes nothing
+    # cannot complete, and this test is about the API client, not coverage.
+    class _StubControl:
+        CONTROL_ID = "C0"
+
+        @staticmethod
+        def run(conn, params):
+            return []
+
+    monkeypatch.setattr(cli, "CONTROLS", [_StubControl])
     monkeypatch.setattr(cli, "c1_coverage", lambda *_: {})
     monkeypatch.setattr(cli, "c3_coverage", lambda *_: {})
     monkeypatch.setattr(cli, "funnel_markdown", lambda *_: "")

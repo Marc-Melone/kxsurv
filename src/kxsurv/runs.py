@@ -115,7 +115,14 @@ def begin_run(conn, params: dict) -> int:
     return int(cur.lastrowid)
 
 
-def finish_run(conn, run_id: int) -> None:
+def finish_run(conn, run_id: int, expected=()) -> None:
+    """Mark a run complete only if every expected control actually executed.
+
+    An earlier version checked only for executions with status != 'complete'.
+    With zero executions that check passes vacuously, so a run in which every
+    control failed to start recorded as complete with no failure. A provenance
+    record asserting completion while nothing ran is worse than no record.
+    """
     unfinished = conn.execute(
         "SELECT control_id FROM control_executions WHERE run_id = ?"
         " AND status != 'complete' ORDER BY control_id", (run_id,)
@@ -123,6 +130,18 @@ def finish_run(conn, run_id: int) -> None:
     if unfinished:
         raise RuntimeError("cannot complete run {} while control execution(s) are unfinished: {}"
                            .format(run_id, ", ".join(row[0] for row in unfinished)))
+
+    done = {row[0] for row in conn.execute(
+        "SELECT control_id FROM control_executions WHERE run_id = ? AND status = 'complete'",
+        (run_id,))}
+    if not done:
+        raise RuntimeError(
+            "cannot complete run {}: no control executions were recorded".format(run_id))
+    missing = sorted(set(expected) - done)
+    if missing:
+        raise RuntimeError("cannot complete run {}: expected control(s) did not execute: {}"
+                           .format(run_id, ", ".join(missing)))
+
     cur = conn.execute(
         "UPDATE control_runs SET status = 'complete', finished_at = ?"
         " WHERE run_id = ? AND status = 'running'",

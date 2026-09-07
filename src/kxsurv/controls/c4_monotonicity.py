@@ -58,6 +58,10 @@ def find_inversions(strikes, min_inversion: float,
 def snapshots(conn, event_ticker: str) -> list[tuple[int, list[tuple]]]:
     """Quotes grouped by candle period, ascending by period then strike.
 
+    Only `greater` strikes enter the ladder. Events can mix contract types, and
+    a `between` contract's probability is not monotone in its floor strike, so
+    including one produces meaningless inversions.
+
     Monotonicity is a statement about simultaneous prices. Grouping by
     `end_period_ts` guarantees every comparison is snapshot-consistent. Strikes
     missing from a period are simply absent from that snapshot -- monotonicity
@@ -67,6 +71,7 @@ def snapshots(conn, event_ticker: str) -> list[tuple[int, list[tuple]]]:
         "SELECT c.end_period_ts, m.floor_strike, c.yes_bid_close, c.yes_ask_close"
         " FROM candles c JOIN markets m ON m.ticker = c.ticker"
         " WHERE m.event_ticker = ? AND m.floor_strike IS NOT NULL"
+        "   AND m.strike_type = 'greater'"
         "   AND c.yes_bid_close IS NOT NULL AND c.yes_ask_close IS NOT NULL"
         " ORDER BY c.end_period_ts ASC, m.floor_strike ASC", (event_ticker,))
     grouped: dict[int, list[tuple]] = {}

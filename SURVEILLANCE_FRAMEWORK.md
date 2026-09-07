@@ -289,6 +289,44 @@ C1 scored 69 of 408 markets (276 unsettled, 61 below the volume floor, 2 with an
 insufficient null), so its alert rate is 3/69 = 4.3% against a 95th-percentile
 threshold — the rate expected of a detector finding no signal.
 
+## 7.5 Out-of-sample application
+
+The v1.1 corrections were made after observing v1.0.0 output on the economic
+corpus, so that corpus cannot validate them. The frozen v1.1.0 parameters and
+code were therefore applied to three series the logic had never seen — `KXGDP`,
+`KXHIGHNY`, and `KXFEDDECISION`: **530 markets, 702,453 trades**, in a separate
+database with its own run record.
+
+**It found a defect the in-sample corpus could not.** Every market in the
+economic corpus is `strike_type = 'greater'`. `KXHIGHNY` mixes `greater`,
+`between` and `less`; `KXFEDDECISION` uses `custom`. C4 selected events holding
+at least one `greater` market but then admitted *every* strike in the event to
+the ladder, so `between` contracts were compared as though their probability
+were monotone in the floor strike. It is not.
+
+| C4 alerts | Out-of-sample | In-sample |
+|---|---|---|
+| Before the fix | 77 (**76 from mixed-type events**) | 42 |
+| After the fix | **1** | 42 — unchanged |
+
+The correction is surgical: it removes only invalid comparisons and leaves the
+all-`greater` corpus identical.
+
+**C3 does not transfer across regimes.** Alert density differs roughly
+eighteenfold — 0.05 alerts per thousand candles on the economic corpus against
+0.92 on the out-of-sample set. Thresholds calibrated on one market family should
+not be assumed to hold on another, and the liquidity tiers are the likely cause.
+This is recorded, not corrected: changing them would require a version bump.
+
+**C1 behaved consistently.** It scored 171 of 396 markets out-of-sample, against
+69 of 408 in-sample, and raised 4 alerts — 2.3% against a 95th-percentile
+threshold, below the ~5% a null detector produces. On a scored sample 2.5 times
+larger it did not over-fire.
+
+**C5 raised nothing**, correctly: three distinct settlement sources with no
+aliasing, no missing declarations, and no ladder settlement contradictions.
+Fixture tests establish it can fire, so this zero is a measurement.
+
 ## 8. Review cadence and known limitations
 
 1. Controls may re-run after ingest, but every output must be interpreted within

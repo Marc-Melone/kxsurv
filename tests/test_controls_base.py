@@ -120,6 +120,11 @@ def test_later_run_keeps_revised_evidence_separate(conn):
 def test_save_alerts_rejects_a_completed_run(conn):
     register(conn, P)
     run_id = begin_run(conn, P)
+    # a run can only complete once a control has actually executed
+    conn.execute("INSERT INTO control_executions (run_id, control_id, status,"
+                 " alert_count, started_at, finished_at) VALUES (?,?,?,?,?,?)",
+                 (run_id, "C4", "complete", 0, "t", "t"))
+    conn.commit()
     finish_run(conn, run_id)
     with pytest.raises(ValueError, match="matching running"):
         save_alerts(conn, [Alert("C4", "T", None, None, 1.0, None, None, {})],

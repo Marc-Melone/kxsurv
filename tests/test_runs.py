@@ -18,9 +18,18 @@ def _alert(target: str) -> Alert:
     return Alert("C4", target, None, None, 1.0, None, 0.01, {})
 
 
+def _record_execution(conn, run_id, control_id="C4"):
+    """A run can only complete if a control actually executed."""
+    conn.execute("INSERT INTO control_executions (run_id, control_id, status,"
+                 " alert_count, started_at, finished_at) VALUES (?,?,?,?,?,?)",
+                 (run_id, control_id, "complete", 0, "t", "t"))
+    conn.commit()
+
+
 def test_database_trigger_rejects_an_insert_into_a_completed_run(conn):
     register(conn, P)
     run_id = begin_run(conn, P)
+    _record_execution(conn, run_id)
     finish_run(conn, run_id)
 
     with pytest.raises(sqlite3.IntegrityError, match="matching running"):
@@ -71,6 +80,7 @@ def test_failed_run_is_excluded_from_default_latest_run_and_funnel(conn):
     register(conn, P)
     complete = begin_run(conn, P)
     save_alerts(conn, [_alert("complete")], P, complete)
+    _record_execution(conn, complete)
     finish_run(conn, complete)
 
     failed = begin_run(conn, P)
@@ -99,3 +109,52 @@ def test_snapshot_refresh_lifecycle_blocks_partial_or_failed_local_runs(conn):
     begin_snapshot_refresh(conn)
     finish_snapshot_refresh(conn)
     verify_snapshot_ready(conn)
+
+
+# --- vacuous completion (found by an out-of-sample run, 2026-09-07) --------
+# finish_run checked for executions with status != 'complete'. With zero
+# executions that check passes vacuously, so a run in which every control
+# failed to start recorded as status='complete', finished_at set, failure NULL.
+# A provenance record that claims completion while nothing executed is worse
+# than no record at all.
+
+import pytest
+from kxsurv.runs import begin_run, finish_run
+from kxsurv.params import register
+
+
+def test_a_run_with_no_executions_cannot_complete(conn):
+    P = {"version": "t", "x": 1}
+    register(conn, P)
+    rid = begin_run(conn, P)
+    with pytest.raises(RuntimeError, match="no control executions"):
+        finish_run(conn, rid, expected=("C1", "C2"))
+    row = conn.execute("SELECT status, finished_at FROM control_runs WHERE run_id = ?",
+                       (rid,)).fetchone()
+    assert row[0] != "complete" and row[1] is None
+
+
+def test_a_run_missing_an_expected_control_cannot_complete(conn):
+    P = {"version": "t", "x": 1}
+    register(conn, P)
+    rid = begin_run(conn, P)
+    conn.execute("INSERT INTO control_executions (run_id, control_id, status,"
+                 " alert_count, started_at, finished_at) VALUES (?,?,?,?,?,?)",
+                 (rid, "C1", "complete", 0, "t", "t"))
+    conn.commit()
+    with pytest.raises(RuntimeError, match="did not execute"):
+        finish_run(conn, rid, expected=("C1", "C2"))
+
+
+def test_a_run_with_every_expected_control_completes(conn):
+    P = {"version": "t", "x": 1}
+    register(conn, P)
+    rid = begin_run(conn, P)
+    for cid in ("C1", "C2"):
+        conn.execute("INSERT INTO control_executions (run_id, control_id, status,"
+                     " alert_count, started_at, finished_at) VALUES (?,?,?,?,?,?)",
+                     (rid, cid, "complete", 0, "t", "t"))
+    conn.commit()
+    finish_run(conn, rid, expected=("C1", "C2"))
+    assert conn.execute("SELECT status FROM control_runs WHERE run_id = ?",
+                        (rid,)).fetchone()[0] == "complete"
