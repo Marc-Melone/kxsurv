@@ -109,3 +109,19 @@ source URL domain before alerting.
 4. The v1.1 saved-snapshot re-analysis is not prospective validation. Publish a
    new public-API run separately, with its run ID, input fingerprint, parameter
    hash, source release, and freshly recorded dispositions.
+
+
+---
+
+## Version history
+
+Parameters are frozen per version. A change requires a version bump and a new
+registration row; prior rows are retained so the record shows what was in force
+when any given run executed.
+
+| Version | Registered | Change |
+|---|---|---|
+| 1.0.0 | 2026-09-07 17:46 UTC | Initial registration, before any control ran. |
+| 1.1.0 | 2026-09-07 22:42 UTC | `c5_settlement.inventory_only` → `true`; unused `divergence_tolerance` removed. C5 declares itself inventory-and-consistency only, because no independent corroborating settlement feed is ingested. **No detection threshold changed** — every window, percentile, volume floor and persistence value is unchanged from 1.0.0. |
+
+No change in either version was made after observing results it would affect.
