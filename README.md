@@ -32,11 +32,11 @@ Corpus: **408 markets** across 5 economic series, **100,494 trades**,
 
 | Stage | Count |
 |---|---|
-| Generated | 59 |
-| Triaged | 59 |
+| Generated | 60 |
+| Triaged | 60 |
 | **Escalated** | **0** |
 | No action | 45 |
-| Monitor | 14 |
+| Monitor | 15 |
 
 | Control | Generated | No action | Monitor |
 |---|---|---|---|
@@ -44,17 +44,21 @@ Corpus: **408 markets** across 5 economic series, **100,494 trades**,
 | C2 pre-halt price pressure | 0 | — | — |
 | C3 volume / open-interest divergence | 13 | 8 | 5 |
 | C4 ladder monotonicity | 42 | 33 | 9 |
-| C5 settlement-source integrity | 0 | — | — |
+| C5 settlement-source integrity | 1 | 0 | 1 |
+
+**Coverage is reported, not assumed.** C1 scores **69 of 408 markets** — 276 are
+unsettled, 61 fall below the volume floor, 2 have too small a null. The control
+emits this funnel itself, so its alert rate is quoted against the denominator it
+actually scored.
 
 **Nothing was escalated.** No alert survived its documented false-positive mode
 on public data with the evidence public data can supply. Every disposition
 carries a written rationale; see `cases/` for worked investigation files.
 
-> **These figures supersede an earlier run.** A self-review found two controls
-> whose central computation was invalid — C4 compared strikes quoted up to 194
-> hours apart, and C3's persistence requirement counted non-adjacent periods as
-> consecutive. Both are corrected. See `cases/CONTROL-NOTE-C4.md` and
-> **Corrections** below.
+> **These figures supersede two earlier runs.** Two rounds of adversarial
+> self-review found twelve defects, including two controls whose central
+> computation was invalid and one published statistic the code did not produce.
+> All are listed under **Corrections** below.
 
 ## What the run actually established
 
@@ -78,15 +82,18 @@ inversions by magnitude closed no-action because they sit against very wide
 quotes.
 
 **A settlement-concentration risk hidden by naming.** `settlement_sources`
-declares both `Bureau of Labor Statistics` and `BLS`. They are one provider. Any
-concentration measure taken from the raw field is wrong. Normalised, BLS resolves
+declares both `Bureau of Labor Statistics` and `BLS`. They are one provider. C5
+detects the alias by acronym matching and reports the merged figure: BLS resolves
 **4 of 5 series and 310 of 408 markets — 76% of the corpus** — so one provider
 outage is a correlated settlement event across three quarters of these markets.
+This is the only finding in the programme that does **not** hit the
+counterparty-identity boundary: a reference-data defect is fully establishable
+from public metadata.
 
 **A control deficiency, recorded rather than patched.** All four C1 alerts ranked
 100th percentile, but against nulls of 5–11 samples a top rank is 8–17% likely by
 chance, and the surprise-weighted scores were negligible because those markets
-were already priced at 0.93–0.995. C1's alert rate is 4/77 = **5.2%** against a
+were already priced at 0.93–0.995. C1's alert rate is 4/69 = **5.8%** against a
 95th-percentile threshold — precisely the false-positive rate of a detector
 finding no signal. C1 v1.0.0 has a percentile threshold with no absolute score
 floor. **Parameters were not altered after seeing these results** — a score floor
@@ -111,6 +118,17 @@ carries each fix.
 | `RELEASE_TIMES` was defined but never read | `release_time_utc` was always NULL while the docs claimed statutory-time alignment | Computed and stored; C1 records the halt-to-publication gap |
 | No control had an end-to-end test | The framework claimed fixture validation that did not exist | Per-control fixture tests: plant a signature and assert it fires, plant a clean tape and assert it does not |
 
+**Second review round** — the first round was not exhaustive, which is itself the point.
+
+| Defect | Effect | Fix |
+|---|---|---|
+| Published statistic the code did not produce | `4/77 = 5.2%` appeared in two documents and four dispositions; the real denominator is 69, so the rate is 5.8% | C1 emits its own `coverage()` funnel; the rate is quoted against what the control scores |
+| C2 and C5 reported zero with no end-to-end test | The same silent-control condition that made C4's zero meaningless | Fixture tests for both; C2 confirmed to fire on planted pressure and reject three negative cases |
+| C5's headline finding was not produced by C5 | The BLS naming result was spotted by reading output, not computed | Acronym-based alias detection in the control; `concentration(normalise=True)` merges declared names |
+| C4 did not enforce snapshot adjacency | Structurally the same defect fixed in C3; passed only because this corpus is densely quoted | Adjacency enforced; real-data result unchanged at 42, so the fix is protective |
+| C1's coverage was undisclosed | 339 of 408 markets skipped silently | `coverage()` reports every skip reason and is printed by the runner |
+| C3's selectivity was misattributed | ~581 of 11,625 periods clear the 95th percentile by construction; 13 alerts survive | Documented that persistence, not the percentile, is what selects |
+
 ## Pre-registration
 
 Every free parameter is frozen in `config/params.yaml`, hashed, and recorded in
@@ -123,7 +141,7 @@ against tuning thresholds until the alerts tell the story you wanted. See
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/pytest -q                                   # 74 tests
+.venv/bin/pytest -q                                   # 86 tests
 PYTHONPATH=src .venv/bin/python -m kxsurv.cli         # ingest + run all controls
 ```
 
