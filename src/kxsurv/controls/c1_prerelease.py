@@ -1,0 +1,140 @@
+"""C1 - pre-release informed trading. CFTC DCM Core Principle 12.
+
+Kalshi halts economic-release markets before the print (KXCPI-26JUL close_time
+12:25:00Z == 08:25 ET, five minutes ahead of the BLS 08:30 ET publication).
+C1 asks whether that window is adequate, not whether it exists.
+
+The naive metric -- "did pre-release flow predict the outcome" -- is wrong: a
+trade at $0.99 on the eventual winner is consensus, not information. The
+informed signature is aggressive flow toward the eventual outcome FROM A PRICE
+THAT DID NOT ALREADY IMPLY IT, hence the surprise weighting.
+
+SAMPLE SIZE: 9 distinct information events across all five economic series
+(132 settled markets, but brackets within an event are not independent). C1
+makes NO population-level statistical claim. It is validated by fixture
+detection behaviour and analyst triage.
+
+COVERAGE: C1 reads the trade tape, which Kalshi retains for ~66 days. Markets
+beyond that horizon cannot be scored and are skipped.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+
+from . import Alert, percentile_of
+from ..events import ladder
+
+CONTROL_ID = "C1"
+
+
+def aggressor_direction(taker_side: str, settled_yes: bool) -> int:
+    """+1 when the aggressor bought the side that ultimately settled YES."""
+    bought_yes = (taker_side == "yes")
+    return 1 if bought_yes == settled_yes else -1
+
+
+def informed_flow_score(trades: list[dict], p0: float, settled_yes: bool) -> float:
+    """Size-weighted directional correctness, discounted by what price knew."""
+    total = sum(float(t["count_fp"]) for t in trades)
+    if total <= 0:
+        return 0.0
+    surprise = 1.0 - (p0 if settled_yes else 1.0 - p0)
+    signed = sum(float(t["count_fp"]) * aggressor_direction(t["taker_side"], settled_yes)
+                 for t in trades)
+    return (signed / total) * surprise
+
+
+def _parse(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _trades_between(conn, ticker: str, start: datetime, end: datetime) -> list[dict]:
+    cur = conn.execute(
+        "SELECT count_fp, taker_side FROM trades WHERE ticker = ?"
+        " AND created_time >= ? AND created_time <= ?",
+        (ticker, _iso(start), _iso(end)))
+    return [{"count_fp": r[0], "taker_side": r[1]} for r in cur.fetchall()]
+
+
+def _mid_at(conn, ticker: str, when: datetime) -> float | None:
+    row = conn.execute(
+        "SELECT yes_bid_close, yes_ask_close FROM candles WHERE ticker = ?"
+        " AND end_period_ts <= ? AND yes_bid_close IS NOT NULL"
+        " AND yes_ask_close IS NOT NULL ORDER BY end_period_ts DESC LIMIT 1",
+        (ticker, int(when.timestamp()))).fetchone()
+    if row:
+        return (row[0] + row[1]) / 2.0
+    last = conn.execute(
+        "SELECT yes_price FROM trades WHERE ticker = ? AND created_time <= ?"
+        " ORDER BY created_time DESC LIMIT 1",
+        (ticker, _iso(when))).fetchone()
+    return last[0] if last else None
+
+
+def run(conn, params: dict) -> list[Alert]:
+    p = params["c1_prerelease"]
+    L = timedelta(minutes=p["window_minutes"])
+    alerts: list[Alert] = []
+
+    events = conn.execute(
+        "SELECT event_ticker, halt_time_utc FROM events"
+        " WHERE halt_time_utc IS NOT NULL").fetchall()
+
+    for event_ticker, halt_str in events:
+        halt = _parse(halt_str)
+        for m in ladder(conn, event_ticker):
+            tk, result = m["ticker"], m["result"]
+            if result not in ("yes", "no"):
+                continue
+            # Skip markets blocked by the completeness gate or beyond the
+            # tape's retention horizon.
+            gate = conn.execute(
+                "SELECT complete, tape_volume FROM ingest_log WHERE ticker = ?",
+                (tk,)).fetchone()
+            if gate and (not gate[0] or gate[1] == 0):
+                continue
+            settled_yes = (result == "yes")
+
+            window = _trades_between(conn, tk, halt - L, halt)
+            volume = sum(float(t["count_fp"]) for t in window)
+            if volume < p["min_window_volume"]:
+                continue
+            p0 = _mid_at(conn, tk, halt - L)
+            if p0 is None:
+                continue
+            score = informed_flow_score(window, p0, settled_yes)
+
+            # Null: same-length windows earlier in this market's own history.
+            null = []
+            for i in range(1, p["null_windows"] + 1):
+                end = halt - L * i
+                w = _trades_between(conn, tk, end - L, end)
+                if not w:
+                    continue
+                q0 = _mid_at(conn, tk, end - L)
+                if q0 is None:
+                    continue
+                null.append(informed_flow_score(w, q0, settled_yes))
+            if len(null) < 3:
+                continue
+
+            pct = percentile_of(score, null)
+            if pct >= p["percentile_threshold"]:
+                alerts.append(Alert(
+                    control_id=CONTROL_ID, target=tk,
+                    window_start=_iso(halt - L), window_end=_iso(halt),
+                    score=score, percentile=pct,
+                    threshold=p["percentile_threshold"],
+                    evidence={
+                        "event": event_ticker, "settled": result,
+                        "p0": p0, "window_volume": volume,
+                        "trade_count": len(window), "null_samples": len(null),
+                        "limitation": "cannot distinguish superior public-"
+                                      "information processing from misuse of "
+                                      "non-public information; n=9 events",
+                    }))
+    return alerts
