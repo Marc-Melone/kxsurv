@@ -1,0 +1,29 @@
+version: "1.0.0"
+
+c1_prerelease:
+  window_minutes: 120          # L: pre-halt window length
+  null_windows: 20             # K: matched control windows for the null
+  percentile_threshold: 95.0
+  min_window_volume: 100.0     # contracts
+
+c2_prehalt:
+  window_minutes: 30           # N
+  min_imbalance_ratio: 0.70    # |signed volume| / total volume
+  min_price_displacement: 0.05 # dollars
+  max_thinness_volume: 500.0   # only markets thinner than this qualify
+
+c3_oi_divergence:
+  min_candle_volume: 50.0      # volume floor; median candle is far below this
+  percentile_threshold: 95.0   # ranked WITHIN liquidity tier
+  min_persistence_periods: 2
+  liquidity_tiers: [100.0, 1000.0, 10000.0]   # OI cut points
+  epsilon: 1.0
+
+c4_monotonicity:
+  min_inversion_dollars: 0.01
+  require_exceeds_half_spread: true
+  min_persistence_snapshots: 2
+
+c5_settlement:
+  divergence_tolerance: 0.0
+  inventory_only: false
