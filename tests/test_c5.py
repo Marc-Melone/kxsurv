@@ -92,3 +92,74 @@ def test_no_alias_alert_when_names_are_consistent(conn):
     build_inventory(conn, FakeApi(), ["KXCPI", "KXU3", "KXFED"])
     assert [a for a in run(conn, P)
             if a.evidence.get("issue") == "provider declared under multiple names"] == []
+
+
+# --- third review round (2026-09-07) ---------------------------------------
+
+class MultiSourceApi:
+    def series(self, t):
+        return {"settlement_sources": [{"name": "Alpha Agency", "url": "a"},
+                                       {"name": "Beta Bureau", "url": "b"}],
+                "category": "X"}
+
+
+def test_per_source_coverage_overlaps_and_is_not_a_partition(conn):
+    """Per-source counts are coverage, not a partition: a market resolving
+    against two declared sources appears under both. On the real corpus every
+    series declares one source, so the counts happen to sum to the total and
+    read like a partition. They are not one, and the framework says so."""
+    upsert_markets(conn, [market(f"KXQ-26JUL-T{i}", "KXQ-26JUL", float(i))
+                          for i in range(10)])
+    build_inventory(conn, MultiSourceApi(), ["KXQ"])
+    rows = concentration(conn)
+    assert {r["source_name"] for r in rows} == {"Alpha Agency", "Beta Bureau"}
+    assert all(r["market_count"] == 10 for r in rows), \
+        "each source covers all 10 markets; the sets overlap"
+    assert sum(r["market_count"] for r in rows) == 20, \
+        "summing overlapping coverage is not meaningful and must not be presented as a total"
+
+
+def test_market_counts_are_live_not_frozen_at_inventory_time(conn):
+    """market_count was read at build_inventory time; markets ingested later
+    left the figure stale. It is now computed by join at report time."""
+    upsert_markets(conn, [market("KXQ-26JUL-T1", "KXQ-26JUL", 1.0)])
+    build_inventory(conn, FakeApi(), ["KXCPI"])
+    conn.execute("UPDATE settlement_sources SET series_ticker='KXQ'")
+    conn.commit()
+    upsert_markets(conn, [market("KXQ-26JUL-T2", "KXQ-26JUL", 2.0)])
+    assert concentration(conn)[0]["market_count"] == 2
+
+
+def test_ladder_result_consistency_is_checked(conn):
+    """A 'greater' ladder cannot settle NO at a low strike and YES at a higher
+    one. Nothing verified this; a contradiction would be a genuine
+    settlement-integrity failure."""
+    from kxsurv.params import register
+    from kxsurv.controls.c5_settlement import run
+    P = {"version": "t", "c5_settlement": {"divergence_tolerance": 0.0,
+                                           "inventory_only": False}}
+    register(conn, P)
+    upsert_markets(conn, [
+        market("KXQ-26JUL-T0.1", "KXQ-26JUL", 0.1, result="no"),
+        market("KXQ-26JUL-T0.2", "KXQ-26JUL", 0.2, result="yes"),  # impossible
+    ])
+    build_inventory(conn, FakeApi(), ["KXCPI"])
+    out = [a for a in run(conn, P)
+           if a.evidence.get("issue") == "ladder settled inconsistently"]
+    assert len(out) == 1
+    assert out[0].evidence["lower_strike"] == 0.1
+
+
+def test_a_consistent_ladder_raises_no_such_alert(conn):
+    from kxsurv.params import register
+    from kxsurv.controls.c5_settlement import run
+    P = {"version": "t", "c5_settlement": {"divergence_tolerance": 0.0,
+                                           "inventory_only": False}}
+    register(conn, P)
+    upsert_markets(conn, [
+        market("KXQ-26JUL-T0.1", "KXQ-26JUL", 0.1, result="yes"),
+        market("KXQ-26JUL-T0.2", "KXQ-26JUL", 0.2, result="no"),
+    ])
+    build_inventory(conn, FakeApi(), ["KXCPI"])
+    assert [a for a in run(conn, P)
+            if a.evidence.get("issue") == "ladder settled inconsistently"] == []
