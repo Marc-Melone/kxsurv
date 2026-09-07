@@ -2,10 +2,17 @@ import pytest
 from kxsurv.triage import disposition, funnel, open_alerts, ACTIONS
 
 
+_seq = iter(range(1, 1000))
+
+
 def _alert(conn, control="C4"):
+    """Distinct target per call: alerts carry a natural key of
+    (control, target, window_start, window_end, params_hash), so identical rows
+    are deduplicated by design."""
     conn.execute(
         "INSERT INTO alerts (control_id, target, score, params_hash, created_at)"
-        " VALUES (?, 'T', 1.0, 'h', '2026-09-07T00:00:00Z')", (control,))
+        " VALUES (?, ?, 1.0, 'h', '2026-09-07T00:00:00Z')",
+        (control, "T{}".format(next(_seq))))
     conn.commit()
     return conn.execute("SELECT MAX(alert_id) FROM alerts").fetchone()[0]
 

@@ -31,14 +31,14 @@ def save_alerts(conn, alerts: list[Alert], params: dict) -> int:
     h = params_hash(params)
     now = datetime.now(timezone.utc).isoformat()
     conn.executemany(
-        "INSERT INTO alerts (control_id, target, window_start, window_end,"
+        "INSERT OR IGNORE INTO alerts (control_id, target, window_start, window_end,"
         " score, percentile, threshold, evidence, params_hash, created_at)"
         " VALUES (?,?,?,?,?,?,?,?,?,?)",
         [(a.control_id, a.target, a.window_start, a.window_end, a.score,
           a.percentile, a.threshold, json.dumps(a.evidence, sort_keys=True),
           h, now) for a in alerts])
     conn.commit()
-    return len(alerts)
+    return len(alerts)  # attempted; duplicates are ignored by the natural key
 
 
 def run_control(conn, module, params: dict) -> list[Alert]:
