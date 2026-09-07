@@ -41,3 +41,65 @@ def test_score_is_size_weighted():
 
 def test_empty_window_scores_zero():
     assert informed_flow_score([], p0=0.5, settled_yes=True) == 0.0
+
+
+# --- end-to-end fixture validation (fix 2026-09-07) ------------------------
+# The framework states C1 is "validated by fixture detection behaviour", but no
+# test drove run() against a database. These plant a signature and assert the
+# control fires, and plant a clean tape and assert it does not.
+
+from datetime import datetime, timedelta, timezone
+
+from kxsurv.db import upsert_markets, upsert_trades, upsert_candles
+from kxsurv.controls.c1_prerelease import run
+from kxsurv.events import build_events
+from kxsurv.params import register
+from tests.fixtures import market, trade, candle
+
+HALT = "2026-08-12T12:25:00Z"
+H = datetime(2026, 8, 12, 12, 25, tzinfo=timezone.utc)
+P1 = {"version": "t", "c1_prerelease": {
+    "window_minutes": 120, "null_windows": 6, "percentile_threshold": 95.0,
+    "min_window_volume": 100.0}}
+
+
+def _setup(conn, informed: bool):
+    register(conn, P1)
+    upsert_markets(conn, [market("KXCPI-26AUG-T1", "KXCPI-26AUG", 1.0,
+                                 result="yes", close_time=HALT)])
+    conn.execute("INSERT OR REPLACE INTO ingest_log (ticker, tape_volume,"
+                 " candle_volume, divergence_pct, complete, checked_at)"
+                 " VALUES ('KXCPI-26AUG-T1', 1.0, 1.0, 0.0, 1, 'x')")
+    # quote at 0.20 throughout: the outcome is NOT priced in, so surprise is high
+    for i in range(0, 9):
+        ts = int((H - timedelta(minutes=120 * i)).timestamp())
+        upsert_candles(conn, [candle("KXCPI-26AUG-T1", ts, 0, 0, bid=0.19, ask=0.21)])
+    # null windows: balanced flow
+    tid = 0
+    for i in range(1, 7):
+        base = H - timedelta(minutes=120 * i)
+        for side in ("yes", "no"):
+            tid += 1
+            upsert_trades(conn, [trade(f"n{tid}", "KXCPI-26AUG-T1",
+                                       (base - timedelta(minutes=60)).isoformat().replace("+00:00", "Z"),
+                                       200, 0.20, taker_side=side)])
+    # test window
+    sides = ("yes", "yes") if informed else ("yes", "no")
+    for k, side in enumerate(sides):
+        upsert_trades(conn, [trade(f"t{k}", "KXCPI-26AUG-T1",
+                                   (H - timedelta(minutes=60)).isoformat().replace("+00:00", "Z"),
+                                   300, 0.20, taker_side=side)])
+    build_events(conn)
+
+
+def test_planted_informed_flow_fires_the_control(conn):
+    _setup(conn, informed=True)
+    out = run(conn, P1)
+    assert len(out) == 1, "one-sided flow toward the outcome from 0.20 must alert"
+    assert out[0].score > 0.5
+    assert out[0].evidence["halt_to_release_minutes"] == 5.0
+
+
+def test_matched_clean_tape_does_not_fire(conn):
+    _setup(conn, informed=False)
+    assert run(conn, P1) == [], "balanced flow must not alert"
