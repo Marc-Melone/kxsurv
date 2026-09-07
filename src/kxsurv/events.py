@@ -1,6 +1,11 @@
 """Release calendar and outcome labelling for threshold ladders."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
+
 # (hour, minute) in US Eastern, the statutory publication time of the source.
 # BLS releases CPI, payrolls and unemployment at 08:30 ET; the FOMC statement
 # lands at 14:00 ET.
@@ -11,6 +16,22 @@ RELEASE_TIMES: dict[str, tuple[int, int]] = {
     "KXU3": (8, 30),
     "KXFED": (14, 0),
 }
+
+
+def release_time_for(series_ticker: str, halt_time_utc: str) -> str | None:
+    """UTC timestamp of the statutory publication, given the market's halt.
+
+    Sources publish at a fixed Eastern wall-clock time on the release date, and
+    the halt sits minutes before it on that same date. Returns None for a series
+    with no registered statutory time rather than guessing one.
+    """
+    hm = RELEASE_TIMES.get(series_ticker)
+    if hm is None or not halt_time_utc:
+        return None
+    halt = datetime.fromisoformat(halt_time_utc.replace("Z", "+00:00"))
+    local = halt.astimezone(ET).replace(
+        hour=hm[0], minute=hm[1], second=0, microsecond=0)
+    return local.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def build_events(conn) -> int:
@@ -25,7 +46,8 @@ def build_events(conn) -> int:
             "INSERT OR REPLACE INTO events (event_ticker, series_ticker,"
             " release_time_utc, halt_time_utc, outcome_ticker)"
             " VALUES (?,?,?,?,?)",
-            (event_ticker, series_ticker, None, halt,
+            (event_ticker, series_ticker,
+             release_time_for(series_ticker, halt), halt,
              event_outcome(conn, event_ticker)))
         n += 1
     conn.commit()

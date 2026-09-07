@@ -81,11 +81,15 @@ def run(conn, params: dict) -> list[Alert]:
     alerts: list[Alert] = []
 
     events = conn.execute(
-        "SELECT event_ticker, halt_time_utc FROM events"
+        "SELECT event_ticker, halt_time_utc, release_time_utc FROM events"
         " WHERE halt_time_utc IS NOT NULL").fetchall()
 
-    for event_ticker, halt_str in events:
+    for event_ticker, halt_str, release_str in events:
         halt = _parse(halt_str)
+        # How much warning does the halt actually give? KXCPI-26JUL halts at
+        # 08:25 ET against an 08:30 ET BLS publication -- five minutes.
+        gap = ((_parse(release_str) - halt).total_seconds() / 60.0
+               if release_str else None)
         for m in ladder(conn, event_ticker):
             tk, result = m["ticker"], m["result"]
             if result not in ("yes", "no"):
@@ -132,6 +136,7 @@ def run(conn, params: dict) -> list[Alert]:
                     evidence={
                         "event": event_ticker, "settled": result,
                         "p0": p0, "window_volume": volume,
+                        "halt_to_release_minutes": gap,
                         "trade_count": len(window), "null_samples": len(null),
                         "limitation": "cannot distinguish superior public-"
                                       "information processing from misuse of "
