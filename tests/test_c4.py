@@ -91,26 +91,26 @@ def test_run_requires_the_inversion_to_persist_across_snapshots(conn):
         "min_persistence_snapshots": 2}}
     register(conn, P)
     _ladder(conn)
-    # snapshot 1: clean.  snapshot 2: inverted.  -> only 1 snapshot inverted
+    # hourly snapshots. 1: clean.  2: inverted.  -> only 1 snapshot inverted
     upsert_candles(conn, [
-        candle("KXT-26SEP-T0.1", 1000, 0, 0, bid=0.90, ask=0.91),
-        candle("KXT-26SEP-T0.2", 1000, 0, 0, bid=0.80, ask=0.81),
-        candle("KXT-26SEP-T0.1", 2000, 0, 0, bid=0.70, ask=0.71),
-        candle("KXT-26SEP-T0.2", 2000, 0, 0, bid=0.90, ask=0.91),
+        candle("KXT-26SEP-T0.1", 1 * 3600, 0, 0, bid=0.90, ask=0.91),
+        candle("KXT-26SEP-T0.2", 1 * 3600, 0, 0, bid=0.80, ask=0.81),
+        candle("KXT-26SEP-T0.1", 2 * 3600, 0, 0, bid=0.70, ask=0.71),
+        candle("KXT-26SEP-T0.2", 2 * 3600, 0, 0, bid=0.90, ask=0.91),
     ])
     assert run(conn, P) == [], "a single inverted snapshot must not alert"
 
-    # snapshot 3 also inverted -> 2 consecutive, alert fires
+    # snapshot 3, the adjacent hour, also inverted -> 2 consecutive, alert fires
     upsert_candles(conn, [
-        candle("KXT-26SEP-T0.1", 3000, 0, 0, bid=0.70, ask=0.71),
-        candle("KXT-26SEP-T0.2", 3000, 0, 0, bid=0.90, ask=0.91),
+        candle("KXT-26SEP-T0.1", 3 * 3600, 0, 0, bid=0.70, ask=0.71),
+        candle("KXT-26SEP-T0.2", 3 * 3600, 0, 0, bid=0.90, ask=0.91),
     ])
     out = run(conn, P)
     assert len(out) == 1
     assert out[0].evidence["snapshots_persisted"] == 2
     # the run's bounds live on the Alert; evidence carries the peak snapshot
-    assert (out[0].window_start, out[0].window_end) == ("2000", "3000")
-    assert out[0].evidence["peak_snapshot_ts"] == 2000
+    assert (out[0].window_start, out[0].window_end) == ("7200", "10800")
+    assert out[0].evidence["peak_snapshot_ts"] == 7200
 
 
 def test_distinct_strike_pairs_in_one_window_are_distinct_alerts(conn):
@@ -134,3 +134,21 @@ def test_distinct_strike_pairs_in_one_window_are_distinct_alerts(conn):
     out = run(conn, P)
     assert len(out) == 2
     assert len({a.target for a in out}) == 2, "targets must be distinguishable"
+
+
+def test_snapshots_far_apart_do_not_form_a_persistent_run(conn):
+    """C3 had this defect and it was fixed there; C4 was left unguarded and
+    passed only because this corpus happens to be densely quoted."""
+    P = {"version": "t", "c4_monotonicity": {
+        "min_inversion_dollars": 0.01, "require_exceeds_half_spread": True,
+        "min_persistence_snapshots": 2}}
+    register(conn, P)
+    upsert_markets(conn, [market(f"KXT-26SEP-T{s}", "KXT-26SEP", s,
+                                 status="active", result="") for s in (0.1, 0.2)])
+    upsert_candles(conn, [
+        candle("KXT-26SEP-T0.1", 3600, 0, 0, bid=0.70, ask=0.71),
+        candle("KXT-26SEP-T0.2", 3600, 0, 0, bid=0.90, ask=0.91),
+        candle("KXT-26SEP-T0.1", 3600 * 200, 0, 0, bid=0.70, ask=0.71),
+        candle("KXT-26SEP-T0.2", 3600 * 200, 0, 0, bid=0.90, ask=0.91),
+    ])
+    assert run(conn, P) == [], "snapshots 199h apart are not consecutive"

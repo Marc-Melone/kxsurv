@@ -29,6 +29,9 @@ from ..events import ladder
 
 CONTROL_ID = "C4"
 
+# Candle period; snapshots must be adjacent to count as consecutive.
+PERIOD_SECONDS = 3600
+
 
 def find_inversions(strikes, min_inversion: float,
                     require_exceeds_half_spread: bool) -> list[dict]:
@@ -88,7 +91,13 @@ def run(conn, params: dict) -> list[Alert]:
         snaps = snapshots(conn, ev)
         # pair -> consecutive-snapshot run currently open
         streak: dict[tuple, list[dict]] = {}
+        prev_ts = None
         for ts, rows in snaps:
+            # "Consecutive" must mean adjacent in time. Without this, snapshots
+            # hours or days apart extend a run -- the defect C3 carried.
+            if prev_ts is not None and ts - prev_ts != PERIOD_SECONDS:
+                streak = {}
+            prev_ts = ts
             if len(rows) < 2:
                 streak = {}
                 continue
