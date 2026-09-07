@@ -34,3 +34,54 @@ def test_liquidity_tiers_partition_by_open_interest():
     assert liquidity_tier(500.0, tiers) == 1
     assert liquidity_tier(5000.0, tiers) == 2
     assert liquidity_tier(50000.0, tiers) == 3
+
+
+# --- temporal adjacency (fix 2026-09-07) -----------------------------------
+# The first implementation counted "consecutive periods" over the volume-
+# filtered list, so two candles 36 days apart counted as consecutive. 88 of 102
+# alerts violated the intended semantics; one claimed 4 consecutive periods
+# spanning 863 hours.
+
+from kxsurv.db import upsert_candles
+from kxsurv.controls.c3_oi_divergence import run
+from kxsurv.params import register
+from tests.fixtures import candle
+
+P = {"version": "t", "c3_oi_divergence": {
+    "min_candle_volume": 50.0, "percentile_threshold": 0.0,
+    "min_persistence_periods": 2, "liquidity_tiers": [100.0], "epsilon": 1.0}}
+H = 3600
+
+
+def test_adjacent_hours_form_a_run(conn):
+    register(conn, P)
+    upsert_candles(conn, [
+        candle("K1", 1 * H, 0, 500),
+        candle("K1", 2 * H, 900, 500),     # flat OI, high volume
+        candle("K1", 3 * H, 900, 500),     # adjacent hour, still flat
+    ])
+    out = run(conn, P)
+    assert len(out) == 1
+    assert out[0].evidence["periods"] == 2
+
+
+def test_a_36_day_gap_is_not_a_run(conn):
+    """The real failure: KXFED-26SEP-T3.00 claimed 4 consecutive periods
+    across 863 hours."""
+    register(conn, P)
+    upsert_candles(conn, [
+        candle("K1", 1 * H, 0, 500),
+        candle("K1", 2 * H, 900, 500),
+        candle("K1", 866 * H, 900, 500),   # 36 days later
+    ])
+    assert run(conn, P) == [], "non-adjacent periods must not form a run"
+
+
+def test_a_single_missing_hour_breaks_the_run(conn):
+    register(conn, P)
+    upsert_candles(conn, [
+        candle("K1", 1 * H, 0, 500),
+        candle("K1", 2 * H, 900, 500),
+        candle("K1", 4 * H, 900, 500),     # hour 3 absent
+    ])
+    assert run(conn, P) == []

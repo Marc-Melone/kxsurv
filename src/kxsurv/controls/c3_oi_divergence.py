@@ -20,6 +20,9 @@ from . import Alert, percentile_of
 
 CONTROL_ID = "C3"
 
+# Candles are ingested hourly; measured modal spacing is 3600s.
+PERIOD_SECONDS = 3600
+
 
 def liquidity_tier(oi: float, tiers: list[float]) -> int:
     t = 0
@@ -73,22 +76,27 @@ def run(conn, params: dict) -> list[Alert]:
             r["tier"] = tier
             tier_pop.setdefault(tier, []).append(r["d"])
 
-    # Pass 2: alert on runs that clear the tier percentile and persist.
+    # Pass 2: alert on runs that clear the tier percentile AND are adjacent in
+    # time. Adjacency is the point of a persistence requirement -- counting
+    # consecutive entries in the volume-filtered list let candles 36 days apart
+    # count as "consecutive" (88 of 102 alerts, corrected 2026-09-07).
     alerts: list[Alert] = []
     for tk, rows in per_ticker.items():
-        run_len = 0
         run_rows: list[dict] = []
         for r in rows:
             pct = percentile_of(r["d"], tier_pop.get(r["tier"], []))
             r["percentile"] = pct
-            if pct >= p["percentile_threshold"]:
-                run_len += 1
+            qualifies = pct >= p["percentile_threshold"]
+            adjacent = (run_rows
+                        and r["end_period_ts"] - run_rows[-1]["end_period_ts"]
+                        == PERIOD_SECONDS)
+            if qualifies and (not run_rows or adjacent):
                 run_rows.append(r)
                 continue
-            if run_len >= p["min_persistence_periods"]:
+            if len(run_rows) >= p["min_persistence_periods"]:
                 alerts.append(_alert(tk, run_rows, p))
-            run_len, run_rows = 0, []
-        if run_len >= p["min_persistence_periods"]:
+            run_rows = [r] if qualifies else []
+        if len(run_rows) >= p["min_persistence_periods"]:
             alerts.append(_alert(tk, run_rows, p))
     return alerts
 
@@ -106,6 +114,7 @@ def _alert(ticker: str, rows: list[dict], p: dict) -> Alert:
             "total_volume": sum(r["volume"] for r in rows),
             "peak_d": peak["d"], "peak_delta_oi": peak["delta_oi"],
             "liquidity_tier": peak["tier"],
+            "span_hours": (rows[-1]["end_period_ts"] - rows[0]["end_period_ts"]) / 3600.0,
             "base_rate_note": "flat-OI base rate measured at 18-27%; "
                               "this is a screening proxy, not evidence",
         })
