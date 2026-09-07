@@ -104,7 +104,7 @@ behaviour and analyst triage.
 fixed Eastern publication time, and stored per event; C1 records the
 halt-to-publication gap in every alert. For BLS series that gap is 5 minutes.
 
-**Empirical observations.** C1's alert rate is 4/77 = **5.2%** against a
+**Empirical observations.** C1's alert rate is 4/69 = **5.8%** against a
 95th-percentile threshold — the false-positive rate expected of a detector
 finding no signal. Mean informed-flow score is **negative at every lag** from the
 halt (−0.02 to −0.14): aggressive takers point away from the eventual outcome on
@@ -136,6 +136,11 @@ participant closes while an unrelated participant opens. `D` is a **screening
 proxy, never evidence**, and its reliability *falls* as liquidity rises.
 Percentiles are therefore ranked within liquidity tier, with a volume floor and
 a persistence requirement.
+
+**Selectivity comes from persistence, not the percentile.** Of 11,625 scoreable
+candle-periods, roughly 581 clear the 95th percentile *by construction*; only 13
+survive the adjacency requirement. The percentile alone is close to vacuous here,
+and the framework previously credited it with the control's selectivity.
 
 **Corrected 2026-09-07.** Persistence was counted over the volume-filtered list
 rather than over time, so candles far apart counted as consecutive: **88 of 102
@@ -212,11 +217,11 @@ by defective controls (see the correction notes in §5 and `cases/`).
 
 | Stage | Count |
 |---|---|
-| Generated | 59 |
-| Triaged | 59 |
+| Generated | 60 |
+| Triaged | 60 |
 | Escalated | **0** |
 | No action | 45 |
-| Monitor | 14 |
+| Monitor | 15 |
 | Untriaged | 0 |
 
 | Control | Generated | No action | Monitor | Escalated |
@@ -225,7 +230,25 @@ by defective controls (see the correction notes in §5 and `cases/`).
 | C2 | 0 | — | — | — |
 | C3 | 13 | 8 | 5 | 0 |
 | C4 | 42 | 33 | 9 | 0 |
-| C5 | 0 | — | — | — |
+| C5 | 1 | 0 | 1 | 0 |
+
+### Coverage
+
+A control's alert rate is only interpretable against what it actually scored.
+C1 reports its own funnel:
+
+| Outcome | Markets |
+|---|---|
+| Considered | 408 |
+| Not settled (no outcome label) | 276 |
+| Below the pre-halt volume floor | 61 |
+| Null population under 3 samples | 2 |
+| **Scored** | **69** |
+
+An earlier draft quoted C1's rate as 4/77 = 5.2%, computed by an ad-hoc script
+using a different filter from the control's own pipeline. The figure was wrong
+and is corrected to **4/69 = 5.8%**, now emitted by `coverage()` rather than
+recalculated by hand.
 
 **Nothing was escalated, and that is the honest result.** No alert survived its
 documented false-positive mode on public data.
@@ -259,7 +282,11 @@ only as Kalshi settles further events, bounded by the 66-day tape horizon.
 5. C5 divergence monitoring is inventory-only without an independent corroborating feed.
 6. The 66-day tape horizon bounds C1 and C2 to recent markets.
 7. Order-book reconstruction, spoofing and layering detection are out of scope.
-8. **A null result is not self-validating.** C4 returned zero for a defective
+8. **Two rounds of adversarial self-review found twelve defects**, and the second
+   round found six the first missed — including a published statistic the code
+   did not produce. A third round would likely find more. The programme's
+   results should be read as current best effort under review, not as settled.
+9. **A null result is not self-validating.** C4 returned zero for a defective
    reason and the zero was initially reported as a clean result. Every control
    now carries end-to-end fixture tests — plant a signature and assert it fires,
    plant a matched clean tape and assert it does not — because a silent control
