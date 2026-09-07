@@ -100,6 +100,18 @@ sequential blocks.
 population-level statistical claim** and is validated by fixture detection
 behaviour and analyst triage.
 
+**Statutory release times** are computed from the halt date and the source's
+fixed Eastern publication time, and stored per event; C1 records the
+halt-to-publication gap in every alert. For BLS series that gap is 5 minutes.
+
+**Empirical observations.** C1's alert rate is 4/77 = **5.2%** against a
+95th-percentile threshold — the false-positive rate expected of a detector
+finding no signal. Mean informed-flow score is **negative at every lag** from the
+halt (−0.02 to −0.14): aggressive takers point away from the eventual outcome on
+average, consistent with takers paying the spread and being largely uninformed. A
+hypothesis that the pre-halt window would score systematically highest through
+convergence was tested and **rejected** (lag 0 mean −0.029 vs lag 8 mean −0.021).
+
 **False-positive mode:** cannot distinguish superior processing of public
 information from misuse of non-public information.
 
@@ -125,6 +137,12 @@ proxy, never evidence**, and its reliability *falls* as liquidity rises.
 Percentiles are therefore ranked within liquidity tier, with a volume floor and
 a persistence requirement.
 
+**Corrected 2026-09-07.** Persistence was counted over the volume-filtered list
+rather than over time, so candles far apart counted as consecutive: **88 of 102
+alerts** violated the intended semantics, one claiming 4 consecutive periods
+across **863 hours**. Runs now require adjacent hourly periods (measured modal
+candle spacing 3600s). C3 fell from 51 alerts to **13**, all genuinely adjacent.
+
 ### C4 — Ladder monotonicity coherence (CP 4)
 
 Kalshi's economic series are `strike_type: "greater"` threshold ladders — nested
@@ -132,9 +150,22 @@ cumulative contracts, **not** mutually exclusive partitions. `KXCPI-26SEP` mids
 sum to 7.54, so a sum-to-$1 constraint would fire on every healthy market. The
 correct constraint is monotonicity: `P(X > k₁) ≥ P(X > k₂) ≥ … ≥ P(X > kₙ)`.
 
-**False-positive mode — dominant:** a 1¢ inversion inside the combined half-spread
-is quote staleness. The registered spread filter suppressed **16** such
-candidates and produced **0** false escalations. See `cases/CONTROL-NOTE-C4.md`.
+**Corrected 2026-09-07 — the control was previously non-functional.** The first
+implementation took each strike's most recent quote independently. Across 28
+events, 12 had strike quotes spanning more than 24 hours (worst: **194 hours**),
+so the control compared a strike quoted eight days ago against one quoted an hour
+ago. It reported **0 alerts**, and that zero was an artifact, not a clean result.
+
+Quotes are now grouped by candle period and only strikes present in the same
+period are compared, which also makes `min_persistence_snapshots` operative for
+the first time. **C4 now finds 42 inversions**, 9 at ≥2× the combined
+half-spread, the largest at 5.0×.
+
+**False-positive mode — dominant:** wide two-sided quoting in adjacent strikes.
+The discriminator is **spread-relative** magnitude: the two largest inversions by
+raw size (0.2250) sit against half-spreads of ~0.20 and closed no-action, while a
+0.095 inversion against a 0.025 half-spread is retained. Full account in
+`cases/CONTROL-NOTE-C4.md`.
 
 ### C5 — Settlement-source integrity (CP 4)
 
@@ -176,21 +207,24 @@ reasoning for each"* demonstrates better judgement than one claiming detections.
 
 ## 7. Results — 2026-09-07 run
 
+These figures **supersede an earlier run** whose C3 and C4 results were produced
+by defective controls (see the correction notes in §5 and `cases/`).
+
 | Stage | Count |
 |---|---|
-| Generated | 55 |
-| Triaged | 55 |
+| Generated | 59 |
+| Triaged | 59 |
 | Escalated | **0** |
-| No action | 51 |
-| Monitor | 4 |
+| No action | 45 |
+| Monitor | 14 |
 | Untriaged | 0 |
 
 | Control | Generated | No action | Monitor | Escalated |
 |---|---|---|---|---|
 | C1 | 4 | 4 | 0 | 0 |
 | C2 | 0 | — | — | — |
-| C3 | 51 | 47 | 4 | 0 |
-| C4 | 0 | — | — | — |
+| C3 | 13 | 8 | 5 | 0 |
+| C4 | 42 | 33 | 9 | 0 |
 | C5 | 0 | — | — | — |
 
 **Nothing was escalated, and that is the honest result.** No alert survived its
@@ -220,7 +254,13 @@ only as Kalshi settles further events, bounded by the 66-day tape horizon.
 1. No counterparty identity — the binding constraint on every control.
 2. C1 rests on 9 independent events; no statistical claim is made.
 3. C3's proxy has an 18–27% benign base rate.
-4. C4 evaluates a single snapshot; persistence is untested.
+4. C4's persistence is exercised only across the snapshots contained in one
+   ingest; a longer collection would test it harder.
 5. C5 divergence monitoring is inventory-only without an independent corroborating feed.
 6. The 66-day tape horizon bounds C1 and C2 to recent markets.
 7. Order-book reconstruction, spoofing and layering detection are out of scope.
+8. **A null result is not self-validating.** C4 returned zero for a defective
+   reason and the zero was initially reported as a clean result. Every control
+   now carries end-to-end fixture tests — plant a signature and assert it fires,
+   plant a matched clean tape and assert it does not — because a silent control
+   and a working one are indistinguishable from output alone.
