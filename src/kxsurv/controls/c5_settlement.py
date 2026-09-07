@@ -89,10 +89,16 @@ def concentration(conn, normalise: bool = False) -> list[dict]:
     With `normalise=True`, names that alias to the same provider are merged --
     which is the only figure that reflects true correlated exposure.
     """
+    # Count DISTINCT markets via a join. Summing the stored per-row
+    # market_count double-counts any series that declares more than one source,
+    # which would inflate the concentration figures.
     cur = conn.execute(
-        "SELECT source_name, COUNT(DISTINCT series_ticker) AS series_count,"
-        " COALESCE(SUM(market_count), 0) AS market_count"
-        " FROM settlement_sources GROUP BY source_name")
+        "SELECT ss.source_name,"
+        "       COUNT(DISTINCT ss.series_ticker) AS series_count,"
+        "       COUNT(DISTINCT m.ticker)         AS market_count"
+        " FROM settlement_sources ss"
+        " LEFT JOIN markets m ON m.series_ticker = ss.series_ticker"
+        " GROUP BY ss.source_name")
     rows = [{"source_name": r[0], "series_count": r[1], "market_count": r[2]}
             for r in cur.fetchall()]
     if normalise:
@@ -133,8 +139,9 @@ def run(conn, params: dict) -> list[Alert]:
         if len(names) < 2:
             continue
         markets = conn.execute(
-            "SELECT COALESCE(SUM(market_count), 0) FROM settlement_sources"
-            " WHERE source_name IN ({})".format(",".join("?" * len(names))),
+            "SELECT COUNT(DISTINCT m.ticker) FROM settlement_sources ss"
+            " JOIN markets m ON m.series_ticker = ss.series_ticker"
+            " WHERE ss.source_name IN ({})".format(",".join("?" * len(names))),
             names).fetchone()[0]
         total = conn.execute("SELECT COUNT(*) FROM markets").fetchone()[0] or 1
         alerts.append(Alert(
@@ -149,7 +156,42 @@ def run(conn, params: dict) -> list[Alert]:
                                      "correlated settlement exposure to this provider",
                       "track": "operational settlement risk, not participant conduct"}))
 
-    # (b) Series declaring no settlement source at all.
+    # (b) Ladder settlement consistency. A `greater` ladder cannot settle NO at
+    # a low strike and YES at a higher one: P(X > k) is non-increasing in k, and
+    # the realised value either exceeds a strike or does not. A contradiction
+    # means the event resolved against inconsistent reference data, which is a
+    # settlement failure rather than a pricing observation.
+    for (ev,) in conn.execute(
+            "SELECT DISTINCT event_ticker FROM markets"
+            " WHERE event_ticker IS NOT NULL AND strike_type = 'greater'"):
+        rows = conn.execute(
+            "SELECT floor_strike, result, ticker FROM markets"
+            " WHERE event_ticker = ? AND floor_strike IS NOT NULL"
+            "   AND result IN ('yes','no') ORDER BY floor_strike ASC",
+            (ev,)).fetchall()
+        last_no = None
+        for strike, result, ticker in rows:
+            if result == "no":
+                last_no = (strike, ticker)
+            elif last_no is not None:
+                alerts.append(Alert(
+                    control_id=CONTROL_ID, target="{}:{}".format(ev, ticker),
+                    window_start=None, window_end=None,
+                    score=float(strike - last_no[0]), percentile=None,
+                    threshold=None,
+                    evidence={"issue": "ladder settled inconsistently",
+                              "lower_strike": last_no[0],
+                              "lower_ticker": last_no[1],
+                              "higher_strike": strike,
+                              "higher_ticker": ticker,
+                              "consequence": "a monotone ladder cannot settle NO "
+                                             "below a strike that settled YES; the "
+                                             "event resolved against inconsistent "
+                                             "reference data",
+                              "track": "operational settlement risk, not participant conduct"}))
+                break
+
+    # (c) Series declaring no settlement source at all.
     rows = conn.execute(
         "SELECT DISTINCT m.series_ticker FROM markets m"
         " WHERE m.series_ticker IS NOT NULL AND m.series_ticker NOT IN"
