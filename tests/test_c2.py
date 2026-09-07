@@ -74,6 +74,11 @@ def test_one_sided_flow_without_displacement_does_not_fire(conn):
     assert run(conn, P2) == [], "imbalance without displacement must not alert"
 
 
+def test_one_sided_flow_against_the_price_move_does_not_fire(conn):
+    _mk(conn, ["yes"] * 4, [0.55, 0.50, 0.45, 0.40])
+    assert run(conn, P2) == [], "pressure must agree with the direction of flow"
+
+
 def test_a_liquid_market_is_out_of_scope(conn):
     _mk(conn, ["yes"] * 4, [0.40, 0.45, 0.50, 0.55])
     conn.execute("UPDATE trades SET count_fp = 1000")   # far above thinness cap

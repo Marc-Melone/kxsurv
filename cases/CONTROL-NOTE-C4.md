@@ -1,7 +1,12 @@
 # Control correction note — C4 ladder monotonicity
 
 **Opened:** 2026-09-07 · **Control:** C4 (CFTC DCM Core Principle 4)
-**Status:** defect found in the control itself, corrected, results superseded
+**Status:** historical v1.0.0 correction record; not a v1.1 disposition report
+
+> This note preserves the v1.0.0 correction history. Its 42-alert and
+> 33/9-disposition figures are historical. v1.1 re-analysis emits 42 C4
+> candidates from the saved snapshot, but they are deliberately untriaged until
+> a new run receives fresh analyst dispositions.
 
 ## Summary
 
@@ -44,11 +49,13 @@ This also made `min_persistence_snapshots` operative for the first time: an
 inversion must now survive consecutive snapshots to alert. Previously the
 parameter was registered but unreachable.
 
-A second defect surfaced during the fix. Alerts are deduplicated on
+A second defect surfaced during the fix. In v1.0.0, alerts were deduplicated on
 `(control, target, window, params_hash)`, and `target` was the event alone — so
 several strike pairs inverting in one event and window collapsed into a single
-row, silently discarding **4 legitimate alerts**. `target` now identifies the
-strike pair.
+row, silently discarding **4 legitimate alerts**. `target` was changed to
+identify the strike pair. Current v1.1 alert identity is additionally scoped to
+`run_id`, so revised data or evidence is retained in a later run rather than
+silently conflated with the earlier alert.
 
 ## Result
 
@@ -67,14 +74,15 @@ The discriminator is **not raw magnitude**. The two largest inversions by size
 a 0.095 inversion against a 0.025 half-spread stays open. Spread-relative
 magnitude is the meaningful quantity; absolute magnitude is misleading.
 
-## Why the parameters did not change
+## Why the v1.0 parameters did not change
 
-Pre-registration froze the C4 thresholds before any control ran. **This
-correction changed code, not parameters** — `min_inversion_dollars`,
-`require_exceeds_half_spread` and `min_persistence_snapshots` are unchanged at
-their registered v1.0.0 values. Had the fix required loosening a threshold to
-produce alerts, that would have demanded a version bump and a new registration
-row, and the change would be visible in the record.
+Pre-registration froze the C4 thresholds before the v1.0.0 run. **That
+correction changed code, not thresholds** — `min_inversion_dollars`,
+`require_exceeds_half_spread`, and `min_persistence_snapshots` were retained in
+v1.1.0. v1.1 is nonetheless a distinct corrective release because control
+mechanics and execution governance changed elsewhere. Its saved-snapshot
+re-analysis is not prospective validation and does not inherit v1.0.0
+dispositions.
 
 ## What this says about the programme
 
@@ -87,4 +95,4 @@ one. Two safeguards would have caught this earlier and are now in place:
    framework claimed this validation existed; it did not. It does now.
 2. **Treating a null result as a hypothesis to test**, not a finding to report.
 
-Both are recorded in `SURVEILLANCE_FRAMEWORK.md` §9.
+Both are recorded in `SURVEILLANCE_FRAMEWORK.md`.
