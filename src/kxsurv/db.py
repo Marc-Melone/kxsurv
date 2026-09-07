@@ -62,6 +62,12 @@ CREATE TABLE IF NOT EXISTS alerts (
   created_at   TEXT NOT NULL
 );
 
+-- Natural key: re-running a control must not duplicate its alerts.
+-- COALESCE keeps NULL windows (C4/C5) from defeating the constraint, since
+-- SQLite treats NULLs as distinct in a UNIQUE index.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_natural ON alerts(
+  control_id, target, COALESCE(window_start,''), COALESCE(window_end,''), params_hash);
+
 CREATE TABLE IF NOT EXISTS dispositions (
   disposition_id INTEGER PRIMARY KEY AUTOINCREMENT,
   alert_id       INTEGER NOT NULL REFERENCES alerts(alert_id),

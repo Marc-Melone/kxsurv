@@ -34,3 +34,20 @@ def test_run_control_executes_when_registered(conn):
             return [Alert("C4", "T", None, None, 1.0, 99.0, 0.5, {})]
     out = run_control(conn, Mod, P)
     assert len(out) == 1 and out[0].control_id == "C4"
+
+
+def test_saving_the_same_alert_twice_does_not_duplicate(conn):
+    """Re-running controls previously doubled the alert table: 51 alerts
+    became 102, so the published funnel figures no longer matched the data."""
+    register(conn, P)
+    a = Alert("C4", "KXCPI-26SEP", "1000", "2000", 0.05, 99.0, 0.01, {"m": 1})
+    save_alerts(conn, [a], P)
+    save_alerts(conn, [a], P)
+    assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 1
+
+
+def test_a_different_window_is_a_different_alert(conn):
+    register(conn, P)
+    save_alerts(conn, [Alert("C4", "T", "1000", "2000", 0.05, None, 0.01, {})], P)
+    save_alerts(conn, [Alert("C4", "T", "3000", "4000", 0.05, None, 0.01, {})], P)
+    assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 2
