@@ -28,9 +28,17 @@ def test_verify_raises_on_unregistered_drift(conn):
         verify(conn, drifted)
 
 
+def test_register_rejects_changed_parameters_without_a_version_bump(conn):
+    p = {"version": "1.0.0", "c4": {"min_inversion_dollars": 0.01}}
+    register(conn, p)
+    changed = {"version": "1.0.0", "c4": {"min_inversion_dollars": 0.02}}
+    with pytest.raises(ParamsDriftError, match="bump"):
+        register(conn, changed)
+
+
 def test_real_params_file_loads_and_has_all_five_controls():
     p = load_params("config/params.yaml")
     for k in ("c1_prerelease", "c2_prehalt", "c3_oi_divergence",
               "c4_monotonicity", "c5_settlement"):
         assert k in p, f"missing {k}"
-    assert p["version"] == "1.0.0"
+    assert p["version"] == "1.1.0"

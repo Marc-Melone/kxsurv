@@ -6,8 +6,8 @@ C1 asks whether that window is adequate, not whether it exists.
 
 The naive metric -- "did pre-release flow predict the outcome" -- is wrong: a
 trade at $0.99 on the eventual winner is consensus, not information. The
-informed signature is aggressive flow toward the eventual outcome FROM A PRICE
-THAT DID NOT ALREADY IMPLY IT, hence the surprise weighting.
+informed signature is aggressive flow toward the eventual outcome FROM AN
+EXECUTION PRICE THAT DID NOT ALREADY IMPLY IT, hence the surprise weighting.
 
 SAMPLE SIZE: 9 distinct information events across all five economic series
 (132 settled markets, but brackets within an event are not independent). C1
@@ -27,21 +27,40 @@ from ..events import ladder
 CONTROL_ID = "C1"
 
 
+def taker_outcome_side(trade: dict) -> str:
+    """Return the canonical direction, rejecting ambiguity rather than guessing."""
+    side = trade.get("taker_outcome_side", trade.get("taker_side"))
+    if side not in {"yes", "no"}:
+        raise ValueError("trade has no valid taker_outcome_side")
+    return side
+
+
 def aggressor_direction(taker_side: str, settled_yes: bool) -> int:
     """+1 when the aggressor bought the side that ultimately settled YES."""
+    if taker_side not in {"yes", "no"}:
+        raise ValueError("trade has no valid taker_outcome_side")
     bought_yes = (taker_side == "yes")
     return 1 if bought_yes == settled_yes else -1
 
 
 def informed_flow_score(trades: list[dict], p0: float, settled_yes: bool) -> float:
-    """Size-weighted directional correctness, discounted by what price knew."""
+    """Size-weighted correctness, discounted by each trade's execution price.
+
+    `p0` is retained only as a fallback for legacy/unit-test rows that lack a
+    price. A single start-of-window quote cannot describe what the market knew
+    two hours later, so live scores use `yes_price` per trade.
+    """
     total = sum(float(t["count_fp"]) for t in trades)
     if total <= 0:
         return 0.0
-    surprise = 1.0 - (p0 if settled_yes else 1.0 - p0)
-    signed = sum(float(t["count_fp"]) * aggressor_direction(t["taker_side"], settled_yes)
-                 for t in trades)
-    return (signed / total) * surprise
+    signed_surprise = 0.0
+    for t in trades:
+        price = float(t.get("yes_price", p0))
+        surprise = 1.0 - (price if settled_yes else 1.0 - price)
+        signed_surprise += (float(t["count_fp"])
+                            * aggressor_direction(taker_outcome_side(t), settled_yes)
+                            * surprise)
+    return signed_surprise / total
 
 
 def _parse(ts: str) -> datetime:
@@ -54,10 +73,11 @@ def _iso(dt: datetime) -> str:
 
 def _trades_between(conn, ticker: str, start: datetime, end: datetime) -> list[dict]:
     cur = conn.execute(
-        "SELECT count_fp, taker_side FROM trades WHERE ticker = ?"
+        "SELECT count_fp, taker_outcome_side, yes_price FROM trades WHERE ticker = ?"
         " AND created_time >= ? AND created_time <= ?",
         (ticker, _iso(start), _iso(end)))
-    return [{"count_fp": r[0], "taker_side": r[1]} for r in cur.fetchall()]
+    return [{"count_fp": r[0], "taker_outcome_side": r[1], "yes_price": r[2]}
+            for r in cur.fetchall()]
 
 
 def _mid_at(conn, ticker: str, when: datetime) -> float | None:
@@ -100,7 +120,7 @@ def coverage(conn, params: dict) -> dict:
             gate = conn.execute(
                 "SELECT complete, tape_volume FROM ingest_log WHERE ticker = ?",
                 (tk,)).fetchone()
-            if gate and (not gate[0] or gate[1] == 0):
+            if not gate or not gate[0] or gate[1] == 0:
                 tally["gate_blocked"] += 1
                 continue
             window = _trades_between(conn, tk, halt - L, halt)
@@ -147,7 +167,7 @@ def run(conn, params: dict) -> list[Alert]:
             gate = conn.execute(
                 "SELECT complete, tape_volume FROM ingest_log WHERE ticker = ?",
                 (tk,)).fetchone()
-            if gate and (not gate[0] or gate[1] == 0):
+            if not gate or not gate[0] or gate[1] == 0:
                 continue
             settled_yes = (result == "yes")
 
@@ -184,6 +204,7 @@ def run(conn, params: dict) -> list[Alert]:
                     evidence={
                         "event": event_ticker, "settled": result,
                         "p0": p0, "window_volume": volume,
+                        "surprise_price": "per-trade execution price",
                         "halt_to_release_minutes": gap,
                         "trade_count": len(window), "null_samples": len(null),
                         "limitation": "cannot distinguish superior public-"

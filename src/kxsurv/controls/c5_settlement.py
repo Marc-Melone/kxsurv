@@ -9,13 +9,14 @@ Part 1 is an inventory: which series resolve against which provider, and how
 concentrated that is. An outage or methodology change at one provider is a
 CORRELATED settlement event across every market it resolves.
 
-Part 2 is divergence monitoring where an independent corroborating source
-exists. Alerts here are operational settlement-risk events, not participant-
-conduct alerts, and route to a separate disposition track.
+No independent corroborating feed is ingested, so this control is deliberately
+limited to source-inventory metadata and resolved-ladder consistency. Alerts
+are operational settlement-risk events, not participant-conduct findings.
 """
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from . import Alert
 
@@ -66,19 +67,30 @@ def alias_groups(names) -> dict[str, str]:
 
 def build_inventory(conn, api, series_tickers: list[str]) -> int:
     n = 0
-    for st in series_tickers:
-        s = api.series(st)
-        category = s.get("category")
-        count = conn.execute(
-            "SELECT COUNT(*) FROM markets WHERE series_ticker = ?", (st,)
-        ).fetchone()[0]
-        for src in (s.get("settlement_sources") or []):
-            conn.execute(
-                "INSERT OR REPLACE INTO settlement_sources (series_ticker,"
-                " source_name, source_url, category, market_count)"
-                " VALUES (?,?,?,?,?)",
-                (st, src.get("name", "unknown"), src.get("url"), category, count))
-            n += 1
+    try:
+        for st in series_tickers:
+            s = api.series(st)
+            if "settlement_sources" not in s:
+                raise ValueError("series {} response omitted settlement_sources".format(st))
+            category = s.get("category")
+            sources = s["settlement_sources"] or []
+            # A refresh is an authoritative replacement for this series.  Retaining
+            # a source removed by the API would make C5's inventory look complete
+            # and could suppress a genuine no-source alert.
+            conn.execute("DELETE FROM settlement_sources WHERE series_ticker = ?", (st,))
+            count = conn.execute(
+                "SELECT COUNT(*) FROM markets WHERE series_ticker = ?", (st,)
+            ).fetchone()[0]
+            for src in sources:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settlement_sources (series_ticker,"
+                    " source_name, source_url, category, market_count)"
+                    " VALUES (?,?,?,?,?)",
+                    (st, src.get("name") or "unknown", src.get("url"), category, count))
+                n += 1
+    except Exception:
+        conn.rollback()
+        raise
     conn.commit()
     return n
 
@@ -89,42 +101,53 @@ def concentration(conn, normalise: bool = False) -> list[dict]:
     With `normalise=True`, names that alias to the same provider are merged --
     which is the only figure that reflects true correlated exposure.
     """
-    # Count DISTINCT markets via a join. Summing the stored per-row
-    # market_count double-counts any series that declares more than one source,
-    # which would inflate the concentration figures.
-    cur = conn.execute(
-        "SELECT ss.source_name,"
-        "       COUNT(DISTINCT ss.series_ticker) AS series_count,"
-        "       COUNT(DISTINCT m.ticker)         AS market_count"
+    # Build set unions, rather than summing pre-aggregated counts. A series can
+    # declare an alias and a long form (or two distinct sources), in which case
+    # summing would double-count its markets after normalisation.
+    raw = conn.execute(
+        "SELECT ss.source_name, ss.series_ticker, m.ticker"
         " FROM settlement_sources ss"
-        " LEFT JOIN markets m ON m.series_ticker = ss.series_ticker"
-        " GROUP BY ss.source_name")
-    rows = [{"source_name": r[0], "series_count": r[1], "market_count": r[2]}
-            for r in cur.fetchall()]
-    if normalise:
-        groups = alias_groups([r["source_name"] for r in rows])
-        merged: dict[str, dict] = {}
-        for r in rows:
-            canon = groups[r["source_name"]]
-            m = merged.setdefault(canon, {"source_name": canon, "series_count": 0,
-                                          "market_count": 0, "declared_as": []})
-            m["series_count"] += r["series_count"]
-            m["market_count"] += r["market_count"]
-            m["declared_as"].append(r["source_name"])
-        rows = list(merged.values())
-        for r in rows:
-            r["declared_as"] = sorted(r["declared_as"])
+        " LEFT JOIN markets m ON m.series_ticker = ss.series_ticker").fetchall()
+    groups = alias_groups([r[0] for r in raw]) if normalise else {}
+    merged: dict[str, dict] = {}
+    for name, series, ticker in raw:
+        canon = groups.get(name, name)
+        item = merged.setdefault(canon, {"source_name": canon, "series": set(),
+                                         "markets": set(), "declared_as": set()})
+        item["series"].add(series)
+        if ticker is not None:
+            item["markets"].add(ticker)
+        item["declared_as"].add(name)
+    rows = []
+    for item in merged.values():
+        row = {"source_name": item["source_name"], "series_count": len(item["series"]),
+               "market_count": len(item["markets"])}
+        if normalise:
+            row["declared_as"] = sorted(item["declared_as"])
+        rows.append(row)
     rows.sort(key=lambda r: (-r["series_count"], -r["market_count"]))
     return rows
 
 
-def run(conn, params: dict) -> list[Alert]:
-    """Flag series that declare no settlement source at all.
+def _source_domains(conn, names: list[str]) -> list[str]:
+    if not names:
+        return []
+    rows = conn.execute(
+        "SELECT source_url FROM settlement_sources WHERE source_name IN ({})".format(
+            ",".join("?" * len(names))), names).fetchall()
+    return sorted({parsed.hostname.lower() for (url,) in rows if url
+                   for parsed in [urlparse(str(url))] if parsed.hostname})
 
-    A market with no declared resolution source is a settlement-risk item on
-    its face, and it is the one divergence check available without an
-    independent corroborating feed.
+
+def run(conn, params: dict) -> list[Alert]:
+    """Flag source-inventory and resolved-ladder consistency problems.
+
+    An independent-feed divergence control is not implemented.  A market with
+    no declared resolution source is nevertheless an inventory-risk item on
+    its face.
     """
+    if not params["c5_settlement"].get("inventory_only", True):
+        raise ValueError("C5 divergence monitoring requires an independent source feed")
     alerts: list[Alert] = []
 
     # (a) A provider declared under more than one name. Any concentration
@@ -138,6 +161,11 @@ def run(conn, params: dict) -> list[Alert]:
     for canon, names in by_entity.items():
         if len(names) < 2:
             continue
+        domains = _source_domains(conn, names)
+        # An acronym collision is not evidence that providers are identical.
+        # Require the declared metadata to corroborate the name match.
+        if len(domains) != 1:
+            continue
         markets = conn.execute(
             "SELECT COUNT(DISTINCT m.ticker) FROM settlement_sources ss"
             " JOIN markets m ON m.series_ticker = ss.series_ticker"
@@ -150,6 +178,7 @@ def run(conn, params: dict) -> list[Alert]:
             score=float(markets), percentile=None, threshold=None,
             evidence={"issue": "provider declared under multiple names",
                       "declared_names": sorted(names),
+                      "source_domains": domains,
                       "markets_affected": markets,
                       "share_of_corpus": round(markets / total, 4),
                       "consequence": "declared concentration understates the "
@@ -167,7 +196,8 @@ def run(conn, params: dict) -> list[Alert]:
         rows = conn.execute(
             "SELECT floor_strike, result, ticker FROM markets"
             " WHERE event_ticker = ? AND floor_strike IS NOT NULL"
-            "   AND result IN ('yes','no') ORDER BY floor_strike ASC",
+            "   AND strike_type = 'greater' AND result IN ('yes','no')"
+            " ORDER BY floor_strike ASC",
             (ev,)).fetchall()
         last_no = None
         for strike, result, ticker in rows:

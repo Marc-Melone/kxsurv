@@ -14,9 +14,9 @@ def _alert(conn):
 
 def test_funnel_markdown_reports_counts(conn):
     aid = _alert(conn)
-    disposition(conn, aid, "no_action", "inside combined spread")
+    disposition(conn, aid, "monitor", "inside combined spread")
     md = funnel_markdown(conn)
-    assert "Generated" in md and "No action" in md
+    assert "Generated" in md and "Monitor" in md
 
 
 def test_case_file_contains_every_mandatory_section(conn):

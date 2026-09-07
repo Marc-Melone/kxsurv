@@ -39,6 +39,11 @@ def test_score_is_size_weighted():
     assert abs(s - 0.40) < 1e-9      # (900-100)/1000 * 0.5
 
 
+def test_late_consensus_trade_is_discounted_at_its_own_execution_price():
+    trade = {"count_fp": 100, "taker_side": "yes", "yes_price": 0.99}
+    assert abs(informed_flow_score([trade], p0=0.20, settled_yes=True) - 0.01) < 1e-9
+
+
 def test_empty_window_scores_zero():
     assert informed_flow_score([], p0=0.5, settled_yes=True) == 0.0
 

@@ -4,10 +4,11 @@ A trade between a new buyer and a new seller raises open interest. A trade
 closing both sides lowers it. A trade where the same beneficial owner sits on
 both sides generates volume while leaving open interest unchanged.
 
-MEASURED BASE RATE (2026-09-07): flat OI despite volume occurs in 27% of
-volume-bearing candles on KXCPI-26JUL-T0.3 and 18% on KXPAYROLLS-26AUG-T60000.
-Open interest also stays flat when one participant closes while an unrelated
-participant opens - ordinary position transfer, common in liquid two-sided
+OBSERVED NON-SPECIFIC SIGNATURE RATE (2026-09-07): flat OI despite volume
+occurs in 26.0% of volume-bearing candles on KXCPI-26JUL-T0.3 and 16.2% on
+KXPAYROLLS-26AUG-T60000. Public data does not label these observations benign;
+open interest can stay flat when one participant closes while an unrelated
+participant opens, an ordinary position transfer common in liquid two-sided
 markets.
 
 D is therefore a SCREENING PROXY, never evidence. Alerts require jointly: a
@@ -35,18 +36,23 @@ def liquidity_tier(oi: float, tiers: list[float]) -> int:
 def divergence_series(candles: list[dict], epsilon: float) -> list[dict]:
     """Candles must be ascending by `end_period_ts`."""
     out: list[dict] = []
-    prev_oi = None
+    prev = None
     for c in candles:
         vol = float(c.get("volume_fp") or 0.0)
         oi = float(c.get("open_interest_fp") or 0.0)
-        if prev_oi is not None and vol > 0:
-            delta = oi - prev_oi
+        # Delta OI must describe the same hourly interval as the volume. A
+        # missing candle otherwise pairs one hour of volume with several hours
+        # of OI movement and can anchor a spurious persistent alert.
+        adjacent = (prev is not None
+                    and c["end_period_ts"] - prev[0] == PERIOD_SECONDS)
+        if adjacent and vol > 0:
+            delta = oi - prev[1]
             out.append({
                 "end_period_ts": c["end_period_ts"],
                 "volume": vol, "delta_oi": delta, "open_interest": oi,
                 "d": vol / (abs(delta) + epsilon),
             })
-        prev_oi = oi
+        prev = (c["end_period_ts"], oi)
     return out
 
 
@@ -58,13 +64,11 @@ def _candles_for(conn, ticker: str) -> list[dict]:
             for r in cur.fetchall()]
 
 
-def run(conn, params: dict) -> list[Alert]:
-    p = params["c3_oi_divergence"]
+def _populations(conn, p: dict) -> tuple[dict[str, list[dict]], dict[int, list[float]]]:
+    """Build the exact within-tier population used by C3 scoring."""
     tiers = p["liquidity_tiers"]
     tickers = [r[0] for r in conn.execute(
         "SELECT DISTINCT ticker FROM candles").fetchall()]
-
-    # Pass 1: build per-tier populations so percentiles are ranked within tier.
     per_ticker: dict[str, list[dict]] = {}
     tier_pop: dict[int, list[float]] = {}
     for tk in tickers:
@@ -75,6 +79,32 @@ def run(conn, params: dict) -> list[Alert]:
             tier = liquidity_tier(r["open_interest"], tiers)
             r["tier"] = tier
             tier_pop.setdefault(tier, []).append(r["d"])
+    return per_ticker, tier_pop
+
+
+def coverage(conn, params: dict) -> dict[str, int]:
+    """Report C3's scored population and percentile gate before persistence.
+
+    This keeps headline selectivity figures reproducible from the same function
+    that supplies `run`, rather than from a separate exploratory script.
+    """
+    p = params["c3_oi_divergence"]
+    per_ticker, tier_pop = _populations(conn, p)
+    scoreable = 0
+    percentile_qualified = 0
+    for rows in per_ticker.values():
+        for r in rows:
+            scoreable += 1
+            if percentile_of(r["d"], tier_pop[r["tier"]]) >= p["percentile_threshold"]:
+                percentile_qualified += 1
+    return {"scoreable": scoreable, "percentile_qualified": percentile_qualified}
+
+
+def run(conn, params: dict) -> list[Alert]:
+    p = params["c3_oi_divergence"]
+
+    # Pass 1: build per-tier populations so percentiles are ranked within tier.
+    per_ticker, tier_pop = _populations(conn, p)
 
     # Pass 2: alert on runs that clear the tier percentile AND are adjacent in
     # time. Adjacency is the point of a persistence requirement -- counting
@@ -115,6 +145,7 @@ def _alert(ticker: str, rows: list[dict], p: dict) -> Alert:
             "peak_d": peak["d"], "peak_delta_oi": peak["delta_oi"],
             "liquidity_tier": peak["tier"],
             "span_hours": (rows[-1]["end_period_ts"] - rows[0]["end_period_ts"]) / 3600.0,
-            "base_rate_note": "flat-OI base rate measured at 18-27%; "
-                              "this is a screening proxy, not evidence",
+            "base_rate_note": "flat-OI signature rate observed at 16.2-26.0%; "
+                              "public data does not label it benign; this is a "
+                              "screening proxy, not evidence",
         })

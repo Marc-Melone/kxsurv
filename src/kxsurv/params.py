@@ -33,14 +33,35 @@ def params_hash(params: dict) -> str:
 
 
 def register(conn, params: dict) -> str:
+    """Explicitly register one immutable parameter set for a new version.
+
+    This is intentionally separate from ordinary control execution.  A version
+    can identify exactly one canonical parameter hash, so changing a threshold
+    requires a version bump before the new set can be registered.
+    """
     h = params_hash(params)
-    conn.execute(
-        "INSERT OR IGNORE INTO params (params_hash, registered_at, version, content)"
-        " VALUES (?, ?, ?, ?)",
-        (h, datetime.now(timezone.utc).isoformat(),
-         str(params.get("version", "unversioned")), _canonical(params)),
-    )
-    conn.commit()
+    version = str(params.get("version", "unversioned"))
+    existing = conn.execute(
+        "SELECT version FROM params WHERE params_hash = ?", (h,)
+    ).fetchone()
+    if existing is not None and existing[0] != version:
+        raise ParamsDriftError(
+            "parameter hash is already registered as version {}; use that "
+            "version or make an intentional, versioned change".format(existing[0]))
+    prior = conn.execute(
+        "SELECT params_hash FROM params WHERE version = ? AND params_hash != ?",
+        (version, h)).fetchone()
+    if prior is not None:
+        raise ParamsDriftError(
+            "version {} is already registered with a different parameter hash; "
+            "bump `version` before registering changed parameters".format(version))
+    if existing is None:
+        conn.execute(
+            "INSERT INTO params (params_hash, registered_at, version, content)"
+            " VALUES (?, ?, ?, ?)",
+            (h, datetime.now(timezone.utc).isoformat(), version, _canonical(params)),
+        )
+        conn.commit()
     return h
 
 

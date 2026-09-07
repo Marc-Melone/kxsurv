@@ -58,3 +58,12 @@ def test_open_alerts_excludes_dispositioned(conn):
     a1, a2 = _alert(conn), _alert(conn)
     disposition(conn, a1, "monitor", "watch next snapshot")
     assert [a["alert_id"] for a in open_alerts(conn)] == [a2]
+
+
+def test_revising_a_disposition_does_not_inflate_the_funnel(conn):
+    aid = _alert(conn)
+    disposition(conn, aid, "monitor", "initial watch")
+    disposition(conn, aid, "no_action", "later evidence resolved the concern")
+    f = funnel(conn)
+    assert f["generated"] == f["triaged"] == f["no_action"] == 1
+    assert f["monitor"] == 0

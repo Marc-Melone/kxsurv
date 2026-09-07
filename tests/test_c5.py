@@ -68,8 +68,7 @@ def test_case_and_punctuation_do_not_create_a_separate_entity():
 
 def test_run_flags_a_provider_declared_under_two_names(conn):
     from kxsurv.params import register
-    P = {"version": "t", "c5_settlement": {"divergence_tolerance": 0.0,
-                                           "inventory_only": False}}
+    P = {"version": "t", "c5_settlement": {"inventory_only": True}}
     register(conn, P)
     upsert_markets(conn, [market("KXCPI-26JUL-T0.1", "KXCPI-26JUL", 0.1),
                           market("KXU3-26JUL-T4.0", "KXU3-26JUL", 4.0)])
@@ -81,12 +80,12 @@ def test_run_flags_a_provider_declared_under_two_names(conn):
     aliases = [a for a in out if a.evidence.get("issue") == "provider declared under multiple names"]
     assert len(aliases) == 1
     assert set(aliases[0].evidence["declared_names"]) == {"BLS", "Bureau of Labor Statistics"}
+    assert aliases[0].evidence["source_domains"] == ["www.bls.gov"]
 
 
 def test_no_alias_alert_when_names_are_consistent(conn):
     from kxsurv.params import register
-    P = {"version": "t", "c5_settlement": {"divergence_tolerance": 0.0,
-                                           "inventory_only": False}}
+    P = {"version": "t", "c5_settlement": {"inventory_only": True}}
     register(conn, P)
     upsert_markets(conn, [market("KXCPI-26JUL-T0.1", "KXCPI-26JUL", 0.1)])
     build_inventory(conn, FakeApi(), ["KXCPI", "KXU3", "KXFED"])
@@ -119,6 +118,19 @@ def test_per_source_coverage_overlaps_and_is_not_a_partition(conn):
         "summing overlapping coverage is not meaningful and must not be presented as a total"
 
 
+def test_normalised_concentration_unions_duplicate_alias_coverage(conn):
+    class AliasApi:
+        def series(self, _):
+            return {"settlement_sources": [
+                {"name": "Bureau of Labor Statistics", "url": "https://www.bls.gov/a"},
+                {"name": "BLS", "url": "https://www.bls.gov/b"}], "category": "X"}
+    upsert_markets(conn, [market("KXQ-26JUL-T1", "KXQ-26JUL", 1.0)])
+    build_inventory(conn, AliasApi(), ["KXQ"])
+    assert concentration(conn, normalise=True) == [{
+        "source_name": "Bureau of Labor Statistics", "series_count": 1,
+        "market_count": 1, "declared_as": ["BLS", "Bureau of Labor Statistics"]}]
+
+
 def test_market_counts_are_live_not_frozen_at_inventory_time(conn):
     """market_count was read at build_inventory time; markets ingested later
     left the figure stale. It is now computed by join at report time."""
@@ -136,8 +148,7 @@ def test_ladder_result_consistency_is_checked(conn):
     settlement-integrity failure."""
     from kxsurv.params import register
     from kxsurv.controls.c5_settlement import run
-    P = {"version": "t", "c5_settlement": {"divergence_tolerance": 0.0,
-                                           "inventory_only": False}}
+    P = {"version": "t", "c5_settlement": {"inventory_only": True}}
     register(conn, P)
     upsert_markets(conn, [
         market("KXQ-26JUL-T0.1", "KXQ-26JUL", 0.1, result="no"),
@@ -153,8 +164,7 @@ def test_ladder_result_consistency_is_checked(conn):
 def test_a_consistent_ladder_raises_no_such_alert(conn):
     from kxsurv.params import register
     from kxsurv.controls.c5_settlement import run
-    P = {"version": "t", "c5_settlement": {"divergence_tolerance": 0.0,
-                                           "inventory_only": False}}
+    P = {"version": "t", "c5_settlement": {"inventory_only": True}}
     register(conn, P)
     upsert_markets(conn, [
         market("KXQ-26JUL-T0.1", "KXQ-26JUL", 0.1, result="yes"),
@@ -163,3 +173,43 @@ def test_a_consistent_ladder_raises_no_such_alert(conn):
     build_inventory(conn, FakeApi(), ["KXCPI"])
     assert [a for a in run(conn, P)
             if a.evidence.get("issue") == "ladder settled inconsistently"] == []
+
+
+def test_ladder_consistency_does_not_compare_other_strike_types(conn):
+    """A mixed event must not compare a non-`greater` contract to the ladder."""
+    from kxsurv.params import register
+
+    P = {"version": "mixed-ladder", "c5_settlement": {"inventory_only": True}}
+    register(conn, P)
+    upsert_markets(conn, [
+        market("KXQ-26JUL-LESS", "KXQ-26JUL", 0.1, result="no", strike_type="less"),
+        market("KXQ-26JUL-GREATER", "KXQ-26JUL", 0.2, result="yes", strike_type="greater"),
+    ])
+    assert [a for a in run(conn, P)
+            if a.evidence.get("issue") == "ladder settled inconsistently"] == []
+
+
+def test_inventory_replaces_sources_removed_by_a_later_api_snapshot(conn):
+    """A refresh must not leave an old provider declaration in place forever."""
+    class MutableApi:
+        def __init__(self):
+            self.sources = [{"name": "Bureau of Labor Statistics",
+                             "url": "https://www.bls.gov/"}]
+
+        def series(self, _):
+            return {"settlement_sources": self.sources, "category": "Economics"}
+
+    from kxsurv.params import register
+
+    params = {"version": "c5-source-removal", "c5_settlement": {"inventory_only": True}}
+    register(conn, params)
+    upsert_markets(conn, [market("KXCPI-26JUL-T0.1", "KXCPI-26JUL", 0.1)])
+    api = MutableApi()
+    build_inventory(conn, api, ["KXCPI"])
+    assert conn.execute("SELECT COUNT(*) FROM settlement_sources").fetchone()[0] == 1
+
+    api.sources = []
+    build_inventory(conn, api, ["KXCPI"])
+    assert conn.execute("SELECT COUNT(*) FROM settlement_sources").fetchone()[0] == 0
+    assert [a.target for a in run(conn, params)
+            if a.evidence.get("issue") == "no declared settlement source"] == ["KXCPI"]

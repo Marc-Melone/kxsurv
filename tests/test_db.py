@@ -1,3 +1,5 @@
+import pytest
+
 from kxsurv.db import upsert_trades, upsert_candles, upsert_markets
 
 TRADE = {
@@ -16,10 +18,29 @@ def test_trades_roundtrip_preserves_fractional_size(conn):
     assert row[1] == 0.99
 
 
+def test_canonical_taker_outcome_side_is_stored_and_preferred(conn):
+    row = dict(TRADE, taker_side="no", taker_outcome_side="yes")
+    upsert_trades(conn, [row])
+    assert conn.execute("SELECT taker_outcome_side FROM trades").fetchone()[0] == "yes"
+
+
+def test_trade_without_a_valid_direction_fails_closed(conn):
+    row = dict(TRADE, taker_side="")
+    with pytest.raises(ValueError, match="outcome side"):
+        upsert_trades(conn, [row])
+
+
 def test_trade_upsert_is_idempotent(conn):
     upsert_trades(conn, [TRADE])
     upsert_trades(conn, [TRADE])
     assert conn.execute("SELECT COUNT(*) FROM trades").fetchone()[0] == 1
+
+
+def test_trade_id_with_changed_detector_input_fails_closed(conn):
+    upsert_trades(conn, [TRADE])
+    conflicting = dict(TRADE, yes_price_dollars="0.5000", no_price_dollars="0.5000")
+    with pytest.raises(ValueError, match="conflicting detector inputs"):
+        upsert_trades(conn, [conflicting])
 
 
 def test_candle_upsert_is_idempotent_on_composite_key(conn):

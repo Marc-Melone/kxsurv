@@ -1,7 +1,13 @@
 # kxsurv — Market Surveillance Program for Kalshi
 
 **Design document — 2026-09-07**
-**Status:** approved for implementation planning
+**Status:** archived v1.0.0 design record; superseded for operation by v1.1.0
+
+> **Archive notice:** this document captures the pre-v1.1 design and contains
+> obsolete algorithms, including C1's single-`p0` weighting and the original C5
+> independent-feed scope. It is retained as development history, not as current
+> surveillance methodology. Read `README.md`, `SURVEILLANCE_FRAMEWORK.md`, and
+> `SURVEILLANCE_PLAN.md` for the current public description.
 
 ---
 

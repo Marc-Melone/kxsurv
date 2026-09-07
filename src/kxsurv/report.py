@@ -7,8 +7,15 @@ from .controls import ESCALATION_LANGUAGE
 from .triage import funnel
 
 
-def funnel_markdown(conn) -> str:
-    f = funnel(conn)
+def funnel_markdown(conn, run_id: int | None = None) -> str:
+    f = funnel(conn, run_id)
+    selected = run_id
+    if selected is None:
+        row = conn.execute(
+            "SELECT run_id FROM control_runs WHERE status = 'complete'"
+            " ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+        selected = row[0] if row else None
     lines = [
         "## Triage funnel", "",
         "| Stage | Count |", "|---|---|",
@@ -19,13 +26,38 @@ def funnel_markdown(conn) -> str:
         "| Monitor | {} |".format(f["monitor"]),
         "| Untriaged | {} |".format(f["untriaged"]),
         "", "### By control", "",
-        "| Control | Generated | Triaged | Escalated | No action |",
-        "|---|---|---|---|---|",
+        "| Control | Generated | Triaged | Escalated | No action | Monitor |",
+        "|---|---|---|---|---|---|",
     ]
     for c in sorted(f["by_control"]):
         r = f["by_control"][c]
-        lines.append("| {} | {} | {} | {} | {} |".format(
-            c, r["generated"], r["triaged"], r["escalated"], r["no_action"]))
+        lines.append("| {} | {} | {} | {} | {} | {} |".format(
+            c, r["generated"], r["triaged"], r["escalated"], r["no_action"],
+            r["monitor"]))
+    if selected is not None:
+        run = conn.execute(
+            "SELECT params_hash, input_hash, code_hash, status, started_at, finished_at"
+            " FROM control_runs WHERE run_id = ?", (selected,)
+        ).fetchone()
+        if run:
+            execution = conn.execute(
+                "SELECT COUNT(*), COALESCE(SUM(status = 'complete'), 0)"
+                " FROM control_executions WHERE run_id = ?", (selected,)
+            ).fetchone()
+            lines.extend([
+                "", "### Run provenance", "",
+                "| Field | Value |", "|---|---|",
+                "| Run ID | {} |".format(selected),
+                "| Parameters SHA-256 | `{}` |".format(run[0]),
+                "| Input fingerprint | `{}` |".format(run[1]),
+                "| Code fingerprint | `{}` |".format(run[2]),
+                "| Status | {} |".format(run[3]),
+                "| Started | {} |".format(run[4]),
+                "| Finished | {} |".format(run[5] or "—"),
+            ])
+            if execution[0]:
+                lines.append("| Controls complete | {}/{} |".format(
+                    execution[1], execution[0]))
     return "\n".join(lines)
 
 
