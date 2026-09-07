@@ -152,3 +152,35 @@ def test_snapshots_far_apart_do_not_form_a_persistent_run(conn):
         candle("KXT-26SEP-T0.2", 3600 * 200, 0, 0, bid=0.90, ask=0.91),
     ])
     assert run(conn, P) == [], "snapshots 199h apart are not consecutive"
+
+
+def test_only_greater_strikes_enter_the_ladder(conn):
+    """Found by an out-of-sample run against KXHIGHNY (2026-09-07).
+
+    run() selected events having at least one 'greater' market, but snapshots()
+    filtered only on event_ticker and floor_strike -- so 'between' and 'less'
+    contracts in the same event were compared as if they formed one monotone
+    ladder. A 'between' contract's probability is not monotone in its floor
+    strike. 76 of 77 out-of-sample C4 alerts came from such mixed events. The
+    in-sample corpus is 100% 'greater', so this could not surface there.
+    """
+    P = {"version": "t", "c4_monotonicity": {
+        "min_inversion_dollars": 0.01, "require_exceeds_half_spread": True,
+        "min_persistence_snapshots": 1}}
+    register(conn, P)
+    upsert_markets(conn, [
+        market("KXM-26SEP-G1", "KXM-26SEP", 0.1, status="active", result=""),
+        market("KXM-26SEP-G2", "KXM-26SEP", 0.2, status="active", result=""),
+        # a 'between' contract in the same event, priced far above both
+        dict(market("KXM-26SEP-B1", "KXM-26SEP", 0.15, status="active", result=""),
+             strike_type="between"),
+    ])
+    upsert_candles(conn, [
+        candle("KXM-26SEP-G1", 3600, 0, 0, bid=0.90, ask=0.91),
+        candle("KXM-26SEP-G2", 3600, 0, 0, bid=0.80, ask=0.81),
+        candle("KXM-26SEP-B1", 3600, 0, 0, bid=0.99, ask=0.99),
+    ])
+    rows = snapshots(conn, "KXM-26SEP")[0][1]
+    assert [r[0] for r in rows] == [0.1, 0.2], \
+        "only 'greater' strikes may enter the ladder"
+    assert run(conn, P) == [], "the 'between' contract must not create an inversion"

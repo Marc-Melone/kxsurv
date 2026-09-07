@@ -1,0 +1,12 @@
+params version: 1.1.0
+{'series': 'KXGDP', 'markets': 51, 'trades': 6770, 'candles': 19013, 'complete_markets': 51}
+{'series': 'KXHIGHNY', 'markets': 414, 'trades': 597455, 'candles': 15502, 'complete_markets': 407}
+{'series': 'KXFEDDECISION', 'markets': 65, 'trades': 98228, 'candles': 54354, 'complete_markets': 64}
+events: 88
+C4: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
+C3: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
+C1: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
+C2: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
+C5: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
+run_id: 1
+OOS COMPLETE

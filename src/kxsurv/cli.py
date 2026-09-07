@@ -79,7 +79,7 @@ def main(skip_ingest: bool = False, register_params: bool = False) -> int:
         fail_run(conn, run_id, exc)
         raise
     else:
-        finish_run(conn, run_id)
+        finish_run(conn, run_id, expected=[m.CONTROL_ID for m in CONTROLS])
 
     print()
     print("C1 coverage:", c1_coverage(conn, params))
