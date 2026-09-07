@@ -178,6 +178,13 @@ Kalshi markets resolve against external reference data, and Core Principle 4
 covers disruption of the settlement process. `GET /series/{ticker}` exposes
 `settlement_sources` as `{name, url}`.
 
+**Reading the table.** Per-source figures are *coverage*, not a partition: a
+market resolving against two declared sources appears under both. On this corpus
+every series declares exactly one source, so the counts happen to sum to 408 and
+read like a partition. They are not one, and summing them is only meaningful
+while that remains true. Counts are computed by join at report time rather than
+frozen at inventory time, so they do not go stale as markets are ingested.
+
 **Concentration finding.** As declared:
 
 | Source (as declared) | Series | Markets |
@@ -282,10 +289,18 @@ only as Kalshi settles further events, bounded by the 66-day tape horizon.
 5. C5 divergence monitoring is inventory-only without an independent corroborating feed.
 6. The 66-day tape horizon bounds C1 and C2 to recent markets.
 7. Order-book reconstruction, spoofing and layering detection are out of scope.
-8. **Two rounds of adversarial self-review found twelve defects**, and the second
-   round found six the first missed — including a published statistic the code
-   did not produce. A third round would likely find more. The programme's
-   results should be read as current best effort under review, not as settled.
+8. **C4 scores only `strike_type = 'greater'` ladders.** All 408 markets in this
+   corpus are of that type, so nothing is currently dropped, but other strike
+   types would go unscored.
+9. **C3's percentile population includes the scored row.** A single ticker
+   contributes up to 5.4% of its own liquidity-tier null. Bounded, measured, and
+   not corrected — restructuring would cost more than the bias is worth.
+10. **Three rounds of adversarial self-review found seventeen defects.** The
+   second round found six the first missed, including a published statistic the
+   code did not produce; the third found five more, of which three were latent
+   rather than active. One claimed defect did not survive checking and is
+   recorded as such. A fourth round would likely find more. These results are
+   current best effort under review, not settled.
 9. **A null result is not self-validating.** C4 returned zero for a defective
    reason and the zero was initially reported as a clean result. Every control
    now carries end-to-end fixture tests — plant a signature and assert it fires,
