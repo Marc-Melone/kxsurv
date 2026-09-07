@@ -263,7 +263,17 @@ start-of-window quote, crediting flow that arrived after the market had already
 converged; surprise is now computed per trade from its own execution price
 (4 → 3 alerts). C3 previously computed the change in open interest against the
 previous *stored* candle, so across a gap one hour of volume was compared with
-several hours of movement (13 → 12 alerts). No pre-registered parameter changed.
+several hours of movement (13 → 12 alerts). **No detection threshold changed** —
+both are code corrections, and every window, percentile, floor and persistence
+value is identical to v1.0.0.
+
+One parameter did change, and it went through the mechanism rather than around
+it: `c5_settlement.inventory_only` was set to `true` (and the unused
+`divergence_tolerance` removed) to declare that C5 performs inventory and
+consistency checks only, since no independent corroborating feed is ingested.
+That required a version bump to **1.1.0** and a new registration row; the v1.0.0
+row is retained. Both registrations are visible in the `params` table, which is
+the point of recording them.
 
 **Run provenance.**
 
