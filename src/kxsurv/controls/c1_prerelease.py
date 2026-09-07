@@ -75,6 +75,54 @@ def _mid_at(conn, ticker: str, when: datetime) -> float | None:
     return last[0] if last else None
 
 
+def coverage(conn, params: dict) -> dict:
+    """Why each market was or was not scored.
+
+    C1's alert rate is only interpretable against the number of markets the
+    control actually scores. Reporting it against any other denominator -- as an
+    earlier ad-hoc calculation did -- misstates the false-positive rate.
+    """
+    p = params["c1_prerelease"]
+    L = timedelta(minutes=p["window_minutes"])
+    tally = {"considered": 0, "no_result": 0, "gate_blocked": 0,
+             "low_volume": 0, "no_p0": 0, "null_too_small": 0, "scored": 0}
+
+    for event_ticker, halt_str in conn.execute(
+            "SELECT event_ticker, halt_time_utc FROM events"
+            " WHERE halt_time_utc IS NOT NULL").fetchall():
+        halt = _parse(halt_str)
+        for m in ladder(conn, event_ticker):
+            tk = m["ticker"]
+            tally["considered"] += 1
+            if m["result"] not in ("yes", "no"):
+                tally["no_result"] += 1
+                continue
+            gate = conn.execute(
+                "SELECT complete, tape_volume FROM ingest_log WHERE ticker = ?",
+                (tk,)).fetchone()
+            if gate and (not gate[0] or gate[1] == 0):
+                tally["gate_blocked"] += 1
+                continue
+            window = _trades_between(conn, tk, halt - L, halt)
+            if sum(float(t["count_fp"]) for t in window) < p["min_window_volume"]:
+                tally["low_volume"] += 1
+                continue
+            if _mid_at(conn, tk, halt - L) is None:
+                tally["no_p0"] += 1
+                continue
+            n = 0
+            for i in range(1, p["null_windows"] + 1):
+                end = halt - L * i
+                if (_trades_between(conn, tk, end - L, end)
+                        and _mid_at(conn, tk, end - L) is not None):
+                    n += 1
+            if n < 3:
+                tally["null_too_small"] += 1
+                continue
+            tally["scored"] += 1
+    return tally
+
+
 def run(conn, params: dict) -> list[Alert]:
     p = params["c1_prerelease"]
     L = timedelta(minutes=p["window_minutes"])
