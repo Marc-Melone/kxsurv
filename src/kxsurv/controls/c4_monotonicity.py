@@ -5,9 +5,11 @@ nested cumulative contracts, NOT mutually exclusive partitions. Verified
 2026-09-07: KXCPI-26SEP mids sum to 7.54, so a sum-to-$1 constraint would fire
 on every healthy market.
 
-The correct constraint is monotonicity: for ascending strikes k1 < k2 < ... < kn,
-P(X > k1) >= P(X > k2) >= ... >= P(X > kn). An inversion is an unambiguous
-pricing incoherence requiring no view on fair value.
+The correct constraint for contemporaneous quotes is monotonicity: for ascending
+strikes k1 < k2 < ... < kn, P(X > k1) >= P(X > k2) >= ... >= P(X > kn).
+C4 applies that constraint to quote closes sharing an hourly candle endpoint, so
+an inversion is a period-aligned coherence candidate rather than proof of an
+exactly simultaneous, executable inconsistency.
 
 Dominant false positive: a 1c inversion inside the combined bid-ask spread of
 two adjacent strikes is quote staleness. Alerts therefore require the magnitude
@@ -16,13 +18,16 @@ to exceed the combined half-spread and to persist.
 CORRECTED 2026-09-07. The first implementation took each strike's most recent
 quote independently. Measured across 28 events, 12 had strike quotes spanning
 more than 24 hours (worst: 194h), so the control was comparing a strike quoted
-eight days ago against one quoted an hour ago. Monotonicity is a statement about
-SIMULTANEOUS prices, so quotes are now grouped by candle period and only strikes
-present in the same period are compared. This also makes
+eight days ago against one quoted an hour ago. Quotes are now grouped by common
+candle end period and only strikes present in that period are compared. This
+removes cross-period mismatches but does not reveal when each market's quote was
+last updated within the hour. It also makes
 `min_persistence_snapshots` operative: an inversion must survive consecutive
 snapshots to alert.
 """
 from __future__ import annotations
+
+from decimal import Decimal
 
 from . import Alert
 from ..events import ladder
@@ -31,26 +36,44 @@ CONTROL_ID = "C4"
 
 # Candle period; snapshots must be adjacent to count as consecutive.
 PERIOD_SECONDS = 3600
+TIMING_LIMITATION = (
+    "Shared hourly candle endpoints do not establish when each market's quote "
+    "last changed within the period."
+)
 
 
 def find_inversions(strikes, min_inversion: float,
                     require_exceeds_half_spread: bool) -> list[dict]:
-    """`strikes` is [(strike, mid, half_spread)] ascending by strike."""
+    """Find inversions in ``[(strike, bid, ask)]`` ascending by strike.
+
+    Prices enter SQLite as decimal API values but are stored as floats. Convert
+    their shortest decimal representation back to ``Decimal`` before applying
+    the threshold. In particular, the strict spread gate is exactly equivalent
+    to ``upper_bid > lower_ask``; calculating it as a difference of binary-float
+    mids and half-spreads can turn equality into a false positive.
+    """
+    threshold = Decimal(str(min_inversion))
     out: list[dict] = []
     for i in range(1, len(strikes)):
-        k_lo, mid_lo, hs_lo = strikes[i - 1]
-        k_hi, mid_hi, hs_hi = strikes[i]
+        k_lo, bid_lo_raw, ask_lo_raw = strikes[i - 1]
+        k_hi, bid_hi_raw, ask_hi_raw = strikes[i]
+        bid_lo, ask_lo = Decimal(str(bid_lo_raw)), Decimal(str(ask_lo_raw))
+        bid_hi, ask_hi = Decimal(str(bid_hi_raw)), Decimal(str(ask_hi_raw))
+        mid_lo = (bid_lo + ask_lo) / 2
+        mid_hi = (bid_hi + ask_hi) / 2
+        hs_lo = (ask_lo - bid_lo) / 2
+        hs_hi = (ask_hi - bid_hi) / 2
         magnitude = mid_hi - mid_lo          # positive == violation
-        if magnitude < min_inversion:
+        if magnitude < threshold:
             continue
         combined_half_spread = hs_lo + hs_hi
-        if require_exceeds_half_spread and magnitude <= combined_half_spread:
+        if require_exceeds_half_spread and bid_hi <= ask_lo:
             continue
         out.append({
             "lower_strike": k_lo, "upper_strike": k_hi,
-            "lower_mid": mid_lo, "upper_mid": mid_hi,
-            "magnitude": magnitude,
-            "combined_half_spread": combined_half_spread,
+            "lower_mid": float(mid_lo), "upper_mid": float(mid_hi),
+            "magnitude": float(magnitude),
+            "combined_half_spread": float(combined_half_spread),
         })
     return out
 
@@ -62,10 +85,11 @@ def snapshots(conn, event_ticker: str) -> list[tuple[int, list[tuple]]]:
     a `between` contract's probability is not monotone in its floor strike, so
     including one produces meaningless inversions.
 
-    Monotonicity is a statement about simultaneous prices. Grouping by
-    `end_period_ts` guarantees every comparison is snapshot-consistent. Strikes
-    missing from a period are simply absent from that snapshot -- monotonicity
-    is transitive, so comparing consecutive *present* strikes remains valid.
+    Grouping by `end_period_ts` aligns quote closes to a common hourly period;
+    the candlestick data do not establish cross-market quote-event simultaneity
+    within that period. Strikes missing from a period are simply absent from the
+    comparison -- monotonicity is transitive, so comparing consecutive
+    *present* strikes remains valid subject to that timing limitation.
     """
     cur = conn.execute(
         "SELECT c.end_period_ts, m.floor_strike, c.yes_bid_close, c.yes_ask_close"
@@ -76,15 +100,16 @@ def snapshots(conn, event_ticker: str) -> list[tuple[int, list[tuple]]]:
         " ORDER BY c.end_period_ts ASC, m.floor_strike ASC", (event_ticker,))
     grouped: dict[int, list[tuple]] = {}
     for ts, strike, bid, ask in cur.fetchall():
-        grouped.setdefault(ts, []).append(
-            (strike, (bid + ask) / 2.0, (ask - bid) / 2.0))
+        grouped.setdefault(ts, []).append((strike, bid, ask))
     return sorted(grouped.items())
 
 
 def run(conn, params: dict) -> list[Alert]:
-    """Alert only where the SAME adjacent-strike pair inverts across
-    `min_persistence_snapshots` consecutive snapshots. A transient inversion is
-    a stale quote; a persistent one is a standing incoherence."""
+    """Alert where one adjacent-strike pair inverts across consecutive periods.
+
+    Persistence reduces one-period noise, but common hourly endpoints do not
+    prove that the underlying cross-market quote updates were simultaneous.
+    """
     p = params["c4_monotonicity"]
     need = p.get("min_persistence_snapshots", 1)
     events = [r[0] for r in conn.execute(
@@ -94,11 +119,11 @@ def run(conn, params: dict) -> list[Alert]:
     alerts: list[Alert] = []
     for ev in events:
         snaps = snapshots(conn, ev)
-        # pair -> consecutive-snapshot run currently open
+        # pair -> consecutive-period run currently open
         streak: dict[tuple, list[dict]] = {}
         prev_ts = None
         for ts, rows in snaps:
-            # "Consecutive" must mean adjacent in time. Without this, snapshots
+            # "Consecutive" must mean adjacent periods. Without this, periods
             # hours or days apart extend a run -- the defect C3 carried.
             if prev_ts is not None and ts - prev_ts != PERIOD_SECONDS:
                 streak = {}
@@ -110,7 +135,8 @@ def run(conn, params: dict) -> list[Alert]:
             for inv in find_inversions(rows, p["min_inversion_dollars"],
                                        p["require_exceeds_half_spread"]):
                 key = (inv["lower_strike"], inv["upper_strike"])
-                found[key] = dict(inv, peak_snapshot_ts=ts)
+                found[key] = dict(inv, peak_snapshot_ts=ts,
+                                  strikes_in_snapshot=len(rows))
             # extend runs that continue; drop those that broke
             streak = {k: streak.get(k, []) + [v] for k, v in found.items()}
             for key, run_rows in streak.items():
@@ -119,7 +145,7 @@ def run(conn, params: dict) -> list[Alert]:
                     alerts.append(Alert(
                         control_id=CONTROL_ID,
                         # the strike pair identifies the alert: several pairs
-                        # can invert in one event and window simultaneously
+                        # can invert in the same event and period window
                         target="{}:{}>{}".format(ev, key[0], key[1]),
                         window_start=str(run_rows[0]["peak_snapshot_ts"]),
                         window_end=str(run_rows[-1]["peak_snapshot_ts"]),
@@ -127,5 +153,6 @@ def run(conn, params: dict) -> list[Alert]:
                         threshold=p["min_inversion_dollars"],
                         evidence={**peak,
                                   "snapshots_persisted": len(run_rows),
-                                  "strikes_in_snapshot": len(rows)}))
+                                  "period_seconds": PERIOD_SECONDS,
+                                  "timing_limitation": TIMING_LIMITATION}))
     return alerts

@@ -1,6 +1,7 @@
 """SQLite store and schema migrations for the surveillance data set."""
 from __future__ import annotations
 
+import json
 import sqlite3
 
 SCHEMA = """
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS control_runs (
   params_hash  TEXT NOT NULL REFERENCES params(params_hash),
   input_hash   TEXT NOT NULL,
   code_hash    TEXT NOT NULL,
+  expected_controls TEXT NOT NULL,
   status       TEXT NOT NULL,
   started_at   TEXT NOT NULL,
   finished_at  TEXT,
@@ -119,6 +121,8 @@ CREATE TABLE IF NOT EXISTS ingest_log (
 CREATE TABLE IF NOT EXISTS snapshot_state (
   state_id       INTEGER PRIMARY KEY CHECK (state_id = 1),
   status         TEXT NOT NULL CHECK (status IN ('ready', 'refreshing', 'failed', 'legacy_ready')),
+  refresh_token  TEXT,
+  generation     INTEGER NOT NULL DEFAULT 0,
   started_at     TEXT,
   completed_at   TEXT,
   failure        TEXT
@@ -212,6 +216,18 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             " WHERE code_hash IS NULL")
     if "failure" not in run_columns:
         conn.execute("ALTER TABLE control_runs ADD COLUMN failure TEXT")
+    if "expected_controls" not in run_columns:
+        # Preserve old runs without inventing controls they did not record. New
+        # runs always persist a non-empty manifest in begin_run().
+        conn.execute("ALTER TABLE control_runs ADD COLUMN expected_controls TEXT")
+        for (run_id,) in conn.execute("SELECT run_id FROM control_runs").fetchall():
+            controls = [row[0] for row in conn.execute(
+                "SELECT control_id FROM control_executions WHERE run_id = ?"
+                " ORDER BY control_id", (run_id,)).fetchall()]
+            conn.execute(
+                "UPDATE control_runs SET expected_controls = ? WHERE run_id = ?",
+                (json.dumps(controls, separators=(",", ":")), run_id),
+            )
 
     duplicate_versions = conn.execute(
         "SELECT version FROM params GROUP BY version HAVING COUNT(DISTINCT params_hash) > 1"
@@ -222,6 +238,42 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
             "Resolve those records explicitly before running controls.".format(
                 ", ".join(r[0] for r in duplicate_versions)))
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_params_version_unique ON params(version)")
+
+    # Registration history is evidence. A corrected parameter set is a new row
+    # with a new version, never an edit or deletion of the old record.
+    conn.execute("DROP TRIGGER IF EXISTS params_are_immutable_update")
+    conn.execute("DROP TRIGGER IF EXISTS params_are_immutable_delete")
+    conn.execute(
+        "CREATE TRIGGER params_are_immutable_update BEFORE UPDATE ON params "
+        "BEGIN SELECT RAISE(ABORT, 'registered parameters are immutable'); END")
+    conn.execute(
+        "CREATE TRIGGER params_are_immutable_delete BEFORE DELETE ON params "
+        "BEGIN SELECT RAISE(ABORT, 'registered parameters are immutable'); END")
+
+    # Disposition revisions are appended and reporting selects the latest row.
+    # Editing history in place would defeat that audit trail.
+    conn.execute("DROP TRIGGER IF EXISTS dispositions_require_valid_insert")
+    conn.execute("DROP TRIGGER IF EXISTS dispositions_are_immutable_update")
+    conn.execute("DROP TRIGGER IF EXISTS dispositions_are_immutable_delete")
+    conn.execute(
+        "CREATE TRIGGER dispositions_require_valid_insert "
+        "BEFORE INSERT ON dispositions WHEN NEW.action NOT IN "
+        "('no_action', 'monitor', 'escalated') OR NEW.rationale IS NULL "
+        "OR trim(NEW.rationale) = '' "
+        "BEGIN SELECT RAISE(ABORT, 'disposition requires a valid action and rationale'); END")
+    conn.execute(
+        "CREATE TRIGGER dispositions_are_immutable_update BEFORE UPDATE ON dispositions "
+        "BEGIN SELECT RAISE(ABORT, 'disposition history is immutable'); END")
+    conn.execute(
+        "CREATE TRIGGER dispositions_are_immutable_delete BEFORE DELETE ON dispositions "
+        "BEGIN SELECT RAISE(ABORT, 'disposition history is immutable'); END")
+
+    state_columns = _columns(conn, "snapshot_state")
+    if "refresh_token" not in state_columns:
+        conn.execute("ALTER TABLE snapshot_state ADD COLUMN refresh_token TEXT")
+    if "generation" not in state_columns:
+        conn.execute(
+            "ALTER TABLE snapshot_state ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
 
     # Databases created before the refresh lifecycle did not record whether a
     # saved data set was complete.  Seed a visibly legacy-ready marker only
@@ -249,7 +301,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TRIGGER IF EXISTS alerts_are_undeletable")
     conn.execute(
         "CREATE TRIGGER alerts_require_active_matching_run BEFORE INSERT ON alerts "
-        "WHEN NEW.run_id IS NOT NULL AND NOT EXISTS ("
+        "WHEN NEW.run_id IS NULL OR NOT EXISTS ("
         " SELECT 1 FROM control_runs WHERE run_id = NEW.run_id"
         " AND params_hash = NEW.params_hash AND status = 'running') "
         "BEGIN SELECT RAISE(ABORT, 'alert requires a matching running control run'); END")
@@ -272,9 +324,78 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE TRIGGER control_execution_requires_running_run "
         "BEFORE INSERT ON control_executions "
-        "WHEN NOT EXISTS (SELECT 1 FROM control_runs WHERE run_id = NEW.run_id"
+        "WHEN NEW.status != 'running' OR NOT EXISTS ("
+        " SELECT 1 FROM control_runs WHERE run_id = NEW.run_id"
         " AND status = 'running') "
-        "BEGIN SELECT RAISE(ABORT, 'control execution requires a running control run'); END")
+        "BEGIN SELECT RAISE(ABORT, 'control execution must start in a running control run'); END")
+    conn.execute("DROP TRIGGER IF EXISTS completed_control_execution_is_immutable_update")
+    conn.execute("DROP TRIGGER IF EXISTS completed_control_execution_is_immutable_delete")
+    conn.execute("DROP TRIGGER IF EXISTS control_execution_transition_is_valid")
+    conn.execute("DROP TRIGGER IF EXISTS control_execution_identity_is_immutable")
+    conn.execute(
+        "CREATE TRIGGER completed_control_execution_is_immutable_update "
+        "BEFORE UPDATE ON control_executions "
+        "WHEN OLD.status != 'running' OR NOT EXISTS ("
+        " SELECT 1 FROM control_runs WHERE run_id = OLD.run_id"
+        " AND status = 'running') "
+        "BEGIN SELECT RAISE(ABORT, 'terminal control execution is immutable'); END")
+    conn.execute(
+        "CREATE TRIGGER completed_control_execution_is_immutable_delete "
+        "BEFORE DELETE ON control_executions "
+        "BEGIN SELECT RAISE(ABORT, 'control execution records are immutable'); END")
+    conn.execute(
+        "CREATE TRIGGER control_execution_transition_is_valid "
+        "BEFORE UPDATE ON control_executions "
+        "WHEN OLD.status = 'running' AND (NEW.status NOT IN ('complete', 'failed')"
+        " OR NEW.finished_at IS NULL"
+        " OR (NEW.status = 'complete' AND (NEW.alert_count IS NULL OR NEW.failure IS NOT NULL))"
+        " OR (NEW.status = 'failed' AND (NEW.failure IS NULL OR trim(NEW.failure) = ''))) "
+        "BEGIN SELECT RAISE(ABORT, 'invalid control execution status transition'); END")
+    conn.execute(
+        "CREATE TRIGGER control_execution_identity_is_immutable "
+        "BEFORE UPDATE OF run_id, control_id, started_at ON control_executions "
+        "BEGIN SELECT RAISE(ABORT, 'control execution identity is immutable'); END")
+
+    # A run's identity is fixed at creation. Only a single running-to-terminal
+    # status transition may add its completion timestamp and failure detail.
+    for trigger in (
+            "control_run_identity_is_immutable", "terminal_control_run_is_immutable",
+            "control_run_transition_is_valid", "control_runs_are_undeletable",
+            "control_run_must_start_running"):
+        conn.execute("DROP TRIGGER IF EXISTS {}".format(trigger))
+    conn.execute(
+        "CREATE TRIGGER control_run_identity_is_immutable "
+        "BEFORE UPDATE OF params_hash, input_hash, code_hash, expected_controls, started_at "
+        "ON control_runs "
+        "BEGIN SELECT RAISE(ABORT, 'control run identity is immutable'); END")
+    conn.execute(
+        "CREATE TRIGGER terminal_control_run_is_immutable "
+        "BEFORE UPDATE ON control_runs WHEN OLD.status != 'running' "
+        "BEGIN SELECT RAISE(ABORT, 'terminal control run is immutable'); END")
+    conn.execute(
+        "CREATE TRIGGER control_run_transition_is_valid "
+        "BEFORE UPDATE ON control_runs WHEN OLD.status = 'running' AND ("
+        " NEW.status NOT IN ('complete', 'failed') OR NEW.finished_at IS NULL"
+        " OR (NEW.status = 'complete' AND NEW.failure IS NOT NULL)"
+        " OR (NEW.status = 'failed' AND (NEW.failure IS NULL OR trim(NEW.failure) = ''))) "
+        "BEGIN SELECT RAISE(ABORT, 'invalid control run status transition'); END")
+    conn.execute(
+        "CREATE TRIGGER control_runs_are_undeletable BEFORE DELETE ON control_runs "
+        "BEGIN SELECT RAISE(ABORT, 'control run records are immutable'); END")
+
+    # Raw detector inputs are a snapshot while a control run is active. These
+    # guards cover direct SQL and helper calls as well as the CLI refresh path.
+    for table in ("trades", "candles", "markets", "events", "ingest_log",
+                  "settlement_sources"):
+        for operation in ("INSERT", "UPDATE", "DELETE"):
+            trigger = "{}_deny_{}_during_run".format(table, operation.lower())
+            conn.execute("DROP TRIGGER IF EXISTS {}".format(trigger))
+            conn.execute(
+                ("CREATE TRIGGER {} BEFORE {} ON {} "
+                 "WHEN EXISTS (SELECT 1 FROM control_runs WHERE status = 'running') "
+                 "BEGIN SELECT RAISE(ABORT, "
+                 "'snapshot inputs cannot change during a running control run'); END")
+                .format(trigger, operation, table))
 
     # Historical v1 alerts predate execution records.  Preserve them as a
     # labelled legacy run instead of mixing them into a later re-run's funnel.
@@ -287,11 +408,33 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         if not exists:
             continue
         cur = conn.execute(
-            "INSERT INTO control_runs (params_hash, input_hash, code_hash, status, started_at, finished_at)"
-            " VALUES (?, 'legacy-input-unavailable', 'legacy-code-unavailable', 'complete', ?, ?)",
+            "INSERT INTO control_runs (params_hash, input_hash, code_hash, expected_controls,"
+            " status, started_at, finished_at)"
+            " VALUES (?, 'legacy-input-unavailable', 'legacy-code-unavailable', '[]',"
+            " 'complete', ?, ?)",
             (params_hash, created_at, created_at))
         conn.execute("UPDATE alerts SET run_id = ? WHERE run_id IS NULL AND params_hash = ?",
                      (cur.lastrowid, params_hash))
+
+    # Legacy binding is complete. From this point onward every alert, including
+    # an unbound malformed legacy row, is immutable. New unbound alerts are
+    # rejected by the insert trigger above.
+    conn.execute("DROP TRIGGER IF EXISTS alerts_are_immutable")
+    conn.execute("DROP TRIGGER IF EXISTS alerts_are_undeletable")
+    conn.execute(
+        "CREATE TRIGGER alerts_are_immutable BEFORE UPDATE ON alerts "
+        "BEGIN SELECT RAISE(ABORT, 'alerts are immutable'); END")
+    conn.execute(
+        "CREATE TRIGGER alerts_are_undeletable BEFORE DELETE ON alerts "
+        "BEGIN SELECT RAISE(ABORT, 'alerts are immutable'); END")
+
+    # The migration above is the sole exception: application-created runs must
+    # start in the running state and reach a terminal state through the guarded
+    # transition triggers.
+    conn.execute(
+        "CREATE TRIGGER control_run_must_start_running BEFORE INSERT ON control_runs "
+        "WHEN NEW.status != 'running' "
+        "BEGIN SELECT RAISE(ABORT, 'control run must start in running state'); END")
 
 
 def _f(v, default=0.0) -> float:

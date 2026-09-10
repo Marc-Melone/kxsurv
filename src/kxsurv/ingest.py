@@ -17,12 +17,13 @@ def check_completeness(conn, ticker: str, tolerance_pct: float = 2.0):
     A market whose tape does not reconcile WITHIN THE WINDOW THE TAPE COVERS is
     blocked from scoring: conclusions drawn on a truncated tape are worthless.
 
-    Kalshi's public trade tape has a retention horizon -- measured at 66 days on
-    2026-09-07 (earliest available trade 2026-07-03) -- while candlestick
-    aggregates reach back further, to 89 days. Comparing a 66-day tape against
-    89 days of candles produced spurious failures on 261 of 408 markets.
-    Reconciliation is therefore measured only from the first available trade
-    forward, where it matches exactly (0.00% across every market tested).
+    The saved 2026-09-07 snapshot was collected from the live trade endpoint
+    only: its first retrieved trade was about 66 days old while candlesticks
+    reached about 89 days. Comparing those unlike acquisition windows produced
+    spurious failures on 261 of 408 markets. Current ingestion queries both
+    Kalshi's live and historical public trade tiers. Reconciliation is still
+    measured only from the first retrieved trade forward so a never-traded
+    prefix is not mistaken for missing data.
 
     A market with candle volume but no tape at all sits beyond the horizon.
     That is a coverage fact, not a truncation failure: C3 reads candles and can
@@ -33,7 +34,7 @@ def check_completeness(conn, ticker: str, tolerance_pct: float = 2.0):
         (ticker,)).fetchone()[0]
 
     if first is None:
-        # Beyond the tape's retention horizon, or genuinely never traded.
+        # No retrieved trades in the acquisition window, or genuinely never traded.
         cand_all = conn.execute(
             "SELECT COALESCE(SUM(volume_fp), 0) FROM candles WHERE ticker = ?",
             (ticker,)).fetchone()[0]
@@ -75,7 +76,7 @@ def ingest_series(conn, api, series_ticker: str, days: int = 90) -> dict:
     complete = 0
     for m in mkts:
         tk = m["ticker"]
-        tr = api.trades(ticker=tk)
+        tr = api.trades(ticker=tk, min_ts=start_ts, max_ts=end_ts)
         n_tr += upsert_trades(conn, [dict(t, ticker=tk) for t in tr])
         cd = api.candlesticks(series_ticker, tk, start_ts, end_ts, 60)
         n_cd += upsert_candles(conn, [dict(c, ticker=tk) for c in cd])

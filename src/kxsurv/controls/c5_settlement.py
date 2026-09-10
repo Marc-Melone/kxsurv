@@ -5,9 +5,10 @@ markets resolve against external reference data. GET /series/{ticker} exposes
 settlement_sources as [{name, url}] -- e.g. KXCPI resolves against the Bureau
 of Labor Statistics.
 
-Part 1 is an inventory: which series resolve against which provider, and how
-concentrated that is. An outage or methodology change at one provider is a
-CORRELATED settlement event across every market it resolves.
+Part 1 is an inventory of declared source names and their coverage. Candidate
+aliases may reveal concentration hidden by inconsistent naming, but public
+metadata alone does not establish that two names identify the same legal
+provider.
 
 No independent corroborating feed is ingested, so this control is deliberately
 limited to source-inventory metadata and resolved-ladder consistency. Alerts
@@ -39,12 +40,11 @@ def acronym(name: str) -> str:
 
 
 def alias_groups(names) -> dict[str, str]:
-    """Map each declared source name to a canonical key for its entity.
+    """Map each declared source name to a canonical candidate-alias key.
 
-    Settlement metadata is free text. The same provider appears as both
-    "Bureau of Labor Statistics" and "BLS", which splits any concentration
-    measure computed from the raw field. A short name matching another name's
-    acronym is treated as the same entity.
+    Settlement metadata is free text. A long name and matching acronym can
+    split a concentration measure computed from the raw field. The grouping is
+    a review candidate, not a verified provider-identity resolution.
     """
     unique = list(dict.fromkeys(names))
     full = {}          # acronym -> canonical (longest spelling wins)
@@ -98,8 +98,8 @@ def build_inventory(conn, api, series_tickers: list[str]) -> int:
 def concentration(conn, normalise: bool = False) -> list[dict]:
     """Series and market counts per settlement source, most concentrated first.
 
-    With `normalise=True`, names that alias to the same provider are merged --
-    which is the only figure that reflects true correlated exposure.
+    With `normalise=True`, candidate alias names are grouped. The result is a
+    conditional coverage scenario, not verified correlated exposure.
     """
     # Build set unions, rather than summing pre-aggregated counts. A series can
     # declare an alias and a long form (or two distinct sources), in which case
@@ -108,7 +108,19 @@ def concentration(conn, normalise: bool = False) -> list[dict]:
         "SELECT ss.source_name, ss.series_ticker, m.ticker"
         " FROM settlement_sources ss"
         " LEFT JOIN markets m ON m.series_ticker = ss.series_ticker").fetchall()
-    groups = alias_groups([r[0] for r in raw]) if normalise else {}
+    groups: dict[str, str] = {}
+    if normalise:
+        candidates = alias_groups([r[0] for r in raw])
+        members: dict[str, list[str]] = {}
+        for name, canon in candidates.items():
+            members.setdefault(canon, []).append(name)
+        for canon, names in members.items():
+            # Apply the same corroboration gate used by the alert. An acronym
+            # collision across different declared domains must not be merged
+            # into a fictitious concentration figure.
+            confirmed_candidate = len(names) > 1 and len(_source_domains(conn, names)) == 1
+            for name in names:
+                groups[name] = canon if confirmed_candidate else name
     merged: dict[str, dict] = {}
     for name, series, ticker in raw:
         canon = groups.get(name, name)
@@ -150,8 +162,8 @@ def run(conn, params: dict) -> list[Alert]:
         raise ValueError("C5 divergence monitoring requires an independent source feed")
     alerts: list[Alert] = []
 
-    # (a) A provider declared under more than one name. Any concentration
-    # measure taken from the raw field is wrong until these are reconciled.
+    # (a) A candidate duplicate declaration. Raw-name concentration may be
+    # understated if authoritative review confirms that the names are aliases.
     declared = [r[0] for r in conn.execute(
         "SELECT DISTINCT source_name FROM settlement_sources").fetchall()]
     groups = alias_groups(declared)
@@ -176,13 +188,13 @@ def run(conn, params: dict) -> list[Alert]:
             control_id=CONTROL_ID, target="source:{}".format(canon),
             window_start=None, window_end=None,
             score=float(markets), percentile=None, threshold=None,
-            evidence={"issue": "provider declared under multiple names",
+            evidence={"issue": "candidate duplicate settlement-source naming",
                       "declared_names": sorted(names),
                       "source_domains": domains,
                       "markets_affected": markets,
                       "share_of_corpus": round(markets / total, 4),
-                      "consequence": "declared concentration understates the "
-                                     "correlated settlement exposure to this provider",
+                      "consequence": "raw-name concentration may understate "
+                                     "correlated exposure if provider identity is confirmed",
                       "track": "operational settlement risk, not participant conduct"}))
 
     # (b) Ladder settlement consistency. A `greater` ladder cannot settle NO at

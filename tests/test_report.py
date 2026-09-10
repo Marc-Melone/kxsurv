@@ -1,14 +1,26 @@
-import json
+from kxsurv.controls import Alert, save_alerts
+from kxsurv.params import register
 from kxsurv.report import case_file_markdown, funnel_markdown
+from kxsurv.runs import begin_run, finish_run
 from kxsurv.triage import disposition
 
 
 def _alert(conn):
+    p = {"version": "report-test"}
+    register(conn, p)
+    run_id = begin_run(conn, p, ("C4",))
+    save_alerts(conn, [Alert(
+        "C4", "KXPAYROLLS-26SEP", None, None, .01, None, None,
+        {"magnitude": .01},
+    )], p, run_id)
     conn.execute(
-        "INSERT INTO alerts (control_id, target, score, percentile, evidence,"
-        " params_hash, created_at) VALUES ('C4','KXPAYROLLS-26SEP',0.01,NULL,?,"
-        " 'h','2026-09-07T00:00:00Z')", (json.dumps({"magnitude": 0.01}),))
+        "INSERT INTO control_executions (run_id, control_id, status, started_at)"
+        " VALUES (?, 'C4', 'running', 't')", (run_id,))
+    conn.execute(
+        "UPDATE control_executions SET status = 'complete', alert_count = 1,"
+        " finished_at = 't' WHERE run_id = ? AND control_id = 'C4'", (run_id,))
     conn.commit()
+    finish_run(conn, run_id)
     return conn.execute("SELECT MAX(alert_id) FROM alerts").fetchone()[0]
 
 

@@ -1,17 +1,17 @@
 """Kalshi public market-data client.
 
 Unauthenticated endpoints only. This program holds no API key, sends no
-authenticated request, and places no order. Rate limits follow Kalshi's
-published Basic tier (200 read tokens/sec, 10 tokens per request => 20 req/s);
-we cap at 10 req/s for headroom and back off on 429/5xx.
+authenticated request, and places no order. The client uses a conservative
+10-request/second local cap and bounded backoff on 429/5xx responses.
 """
 from __future__ import annotations
 
+import json
 import time
 
 import requests
 
-BASE = "https://api.elections.kalshi.com/trade-api/v2"
+BASE = "https://external-api.kalshi.com/trade-api/v2"
 
 
 class RateLimiter:
@@ -49,11 +49,12 @@ class KalshiPublic:
 
     def _paginate(self, path: str, key: str, params: dict,
                   max_pages: int = 200) -> list[dict]:
-        """Follow cursors to exhaustion, with two termination guards.
+        """Follow cursors to exhaustion and fail closed on non-termination.
 
         An endpoint echoing the same cursor alongside a non-empty batch would
-        otherwise spin forever accumulating duplicates, and an endpoint issuing
-        endlessly fresh cursors would never return.
+        otherwise spin forever, and an endpoint issuing endlessly fresh cursors
+        would never return. Either condition means completeness is unknown, so
+        returning the accumulated prefix would be unsafe for surveillance.
         """
         out: list[dict] = []
         cursor = ""
@@ -66,10 +67,18 @@ class KalshiPublic:
             batch = d.get(key, []) or []
             out.extend(batch)
             cursor = d.get("cursor", "") or ""
-            if not cursor or not batch or cursor in seen:
+            if not cursor:
                 return out
+            if not batch:
+                raise RuntimeError(
+                    "pagination returned an empty page with a non-terminal cursor: {}"
+                    .format(path))
+            if cursor in seen:
+                raise RuntimeError("pagination cursor repeated before exhaustion: {}"
+                                   .format(path))
             seen.add(cursor)
-        return out
+        raise RuntimeError(
+            "pagination exceeded {} pages before exhaustion: {}".format(max_pages, path))
 
     def series(self, ticker: str) -> dict:
         return self._get("/series/" + ticker).get("series", {})
@@ -82,11 +91,37 @@ class KalshiPublic:
         params.update({k: v for k, v in filters.items() if v is not None})
         return self._paginate("/markets", "markets", params)
 
-    def trades(self, ticker: str | None = None, limit: int = 1000) -> list[dict]:
+    def trades(self, ticker: str | None = None, limit: int = 1000,
+               min_ts: int | None = None, max_ts: int | None = None) -> list[dict]:
+        """Return the union of live- and historical-tier public trades.
+
+        Kalshi partitions trades at a moving cutoff. Querying only the live
+        endpoint silently truncates older windows, so both unauthenticated
+        endpoints are queried and merged by immutable trade ID.
+        """
         params: dict = {"limit": limit}
         if ticker:
             params["ticker"] = ticker
-        return self._paginate("/markets/trades", "trades", params)
+        if min_ts is not None:
+            params["min_ts"] = int(min_ts)
+        if max_ts is not None:
+            params["max_ts"] = int(max_ts)
+        live = self._paginate("/markets/trades", "trades", params)
+        historical = self._paginate("/historical/trades", "trades", params)
+
+        by_id: dict[str, dict] = {}
+        for row in historical + live:
+            trade_id = row.get("trade_id")
+            if not isinstance(trade_id, str) or not trade_id:
+                raise RuntimeError("trade response omitted a non-empty trade_id")
+            prior = by_id.get(trade_id)
+            if prior is not None and json.dumps(prior, sort_keys=True) != json.dumps(
+                    row, sort_keys=True):
+                raise RuntimeError(
+                    "live and historical endpoints disagree for trade {}".format(trade_id))
+            by_id[trade_id] = row
+        return sorted(by_id.values(), key=lambda row: (
+            str(row.get("created_time", "")), row["trade_id"]))
 
     def candlesticks(self, series: str, ticker: str, start_ts: int,
                      end_ts: int, period_interval: int = 60) -> list[dict]:

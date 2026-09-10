@@ -1,6 +1,9 @@
 import pytest
 
+from kxsurv.controls import Alert, save_alerts
 from kxsurv.db import upsert_trades, upsert_candles, upsert_markets
+from kxsurv.params import register
+from kxsurv.runs import begin_run
 
 TRADE = {
     "trade_id": "t1", "ticker": "KXCPI-26JUL-T0.3",
@@ -64,9 +67,11 @@ def test_market_stores_strike_type_and_result(conn):
 
 
 def test_alerts_and_dispositions_link(conn):
-    conn.execute(
-        "INSERT INTO alerts (control_id, target, score, params_hash, created_at)"
-        " VALUES ('C4','KXCPI-26SEP',0.5,'abc','2026-09-07T00:00:00Z')")
+    p = {"version": "db-link-test"}
+    register(conn, p)
+    run_id = begin_run(conn, p, ("C4",))
+    save_alerts(conn, [Alert("C4", "KXCPI-26SEP", None, None, .5, None,
+                             None, {})], p, run_id)
     aid = conn.execute("SELECT alert_id FROM alerts").fetchone()[0]
     conn.execute(
         "INSERT INTO dispositions (alert_id, action, rationale, created_at)"

@@ -3,6 +3,7 @@ import sqlite3
 import pytest
 
 from kxsurv.db import connect, init_schema
+from kxsurv.runs import begin_snapshot_refresh, finish_snapshot_refresh
 
 
 def test_legacy_alerts_migrate_without_a_preexisting_natural_key_index():
@@ -73,3 +74,27 @@ def test_migration_rejects_an_ambiguous_legacy_parameter_version():
 
     with pytest.raises(RuntimeError, match="more than one hash"):
         init_schema(conn)
+
+
+def test_legacy_snapshot_state_gains_refresh_ownership_and_generation():
+    conn = connect(":memory:")
+    conn.execute("""
+        CREATE TABLE snapshot_state (
+          state_id INTEGER PRIMARY KEY, status TEXT NOT NULL,
+          started_at TEXT, completed_at TEXT, failure TEXT
+        )
+    """)
+    conn.execute(
+        "INSERT INTO snapshot_state VALUES (1, 'ready', 'old-start', 'old-end', NULL)")
+    conn.commit()
+
+    init_schema(conn)
+    assert conn.execute(
+        "SELECT status, refresh_token, generation FROM snapshot_state"
+    ).fetchone() == ("ready", None, 0)
+
+    token = begin_snapshot_refresh(conn)
+    assert conn.execute(
+        "SELECT status, refresh_token, generation FROM snapshot_state"
+    ).fetchone() == ("refreshing", token, 1)
+    finish_snapshot_refresh(conn, token)

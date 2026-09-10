@@ -47,8 +47,8 @@ def test_completeness_records_result_in_ingest_log(conn):
 
 
 def test_candles_predating_the_tape_are_not_counted_as_divergence(conn):
-    """Kalshi's public tape has a ~66-day retention horizon (measured
-    2026-09-07); candlestick aggregates outlive individual trade records.
+    """The saved 2026-09-07 acquisition used the live trade tier only; its
+    retrieved trades covered ~66 days while candles covered ~89 days.
 
     Reconciling a 66-day tape against 89 days of candles produced spurious
     failures on 261 of 408 markets. Completeness must be measured only over the
@@ -65,8 +65,8 @@ def test_candles_predating_the_tape_are_not_counted_as_divergence(conn):
 
 
 def test_market_with_candles_but_no_tape_is_flagged_not_failed(conn):
-    """Beyond the retention horizon there is no tape to reconcile. That is a
-    coverage fact, not a truncation failure - C3 can still score the market."""
+    """No retrieved trades is a coverage fact, not automatically a truncation
+    failure; C3 can still score the candle data."""
     upsert_candles(conn, [candle("K1", TS_OLD, 157, 100)])
     ok, div = check_completeness(conn, "K1")
     assert ok is True
