@@ -11,7 +11,7 @@ P = {"version": "1.0.0", "c4_monotonicity": {"min_inversion_dollars": 0.01}}
 
 def test_alert_persists_with_params_hash(conn):
     register(conn, P)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C4",))
     save_alerts(conn, [Alert("C4", "KXCPI-26SEP", None, None, 0.01, 99.0, 0.01,
                              {"strike": 0.3})], P, run_id)
     row = conn.execute(
@@ -32,7 +32,7 @@ def test_run_control_refuses_unregistered_params(conn):
 
 def test_run_control_executes_when_registered(conn):
     register(conn, P)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C4",))
 
     class Mod:
         CONTROL_ID = "C4"
@@ -49,7 +49,7 @@ def test_run_control_executes_when_registered(conn):
 
 def test_zero_alert_control_is_recorded_as_complete(conn):
     register(conn, P)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C2",))
 
     class Mod:
         CONTROL_ID = "C2"
@@ -68,7 +68,7 @@ def test_zero_alert_control_is_recorded_as_complete(conn):
 
 def test_failed_control_has_its_own_audit_record(conn):
     register(conn, P)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C3",))
 
     class Broken:
         CONTROL_ID = "C3"
@@ -90,7 +90,7 @@ def test_saving_the_same_alert_twice_fails_closed_without_a_second_row(conn):
     """Re-running controls previously doubled the alert table: 51 alerts
     became 102, so the published funnel figures no longer matched the data."""
     register(conn, P)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C4",))
     a = Alert("C4", "KXCPI-26SEP", "1000", "2000", 0.05, 99.0, 0.01, {"m": 1})
     assert save_alerts(conn, [a], P, run_id) == 1
     with pytest.raises(sqlite3.IntegrityError):
@@ -100,7 +100,7 @@ def test_saving_the_same_alert_twice_fails_closed_without_a_second_row(conn):
 
 def test_a_different_window_is_a_different_alert(conn):
     register(conn, P)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C4",))
     save_alerts(conn, [Alert("C4", "T", "1000", "2000", 0.05, None, 0.01, {})], P, run_id)
     save_alerts(conn, [Alert("C4", "T", "3000", "4000", 0.05, None, 0.01, {})], P, run_id)
     assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 2
@@ -108,7 +108,7 @@ def test_a_different_window_is_a_different_alert(conn):
 
 def test_later_run_keeps_revised_evidence_separate(conn):
     register(conn, P)
-    first, second = begin_run(conn, P), begin_run(conn, P)
+    first, second = begin_run(conn, P, ("C4",)), begin_run(conn, P, ("C4",))
     old = Alert("C4", "T", "1000", "2000", 0.01, None, 0.01, {"v": "old"})
     new = Alert("C4", "T", "1000", "2000", 0.50, None, 0.01, {"v": "new"})
     save_alerts(conn, [old], P, first)
@@ -119,11 +119,12 @@ def test_later_run_keeps_revised_evidence_separate(conn):
 
 def test_save_alerts_rejects_a_completed_run(conn):
     register(conn, P)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C4",))
     # a run can only complete once a control has actually executed
-    conn.execute("INSERT INTO control_executions (run_id, control_id, status,"
-                 " alert_count, started_at, finished_at) VALUES (?,?,?,?,?,?)",
-                 (run_id, "C4", "complete", 0, "t", "t"))
+    conn.execute("INSERT INTO control_executions (run_id, control_id, status, started_at)"
+                 " VALUES (?, 'C4', 'running', 't')", (run_id,))
+    conn.execute("UPDATE control_executions SET status = 'complete', alert_count = 0,"
+                 " finished_at = 't' WHERE run_id = ? AND control_id = 'C4'", (run_id,))
     conn.commit()
     finish_run(conn, run_id)
     with pytest.raises(ValueError, match="matching running"):
@@ -135,7 +136,7 @@ def test_save_alerts_rejects_a_run_registered_for_other_parameters(conn):
     other = {"version": "2.0.0", "c4_monotonicity": {"min_inversion_dollars": 0.02}}
     register(conn, P)
     register(conn, other)
-    run_id = begin_run(conn, P)
+    run_id = begin_run(conn, P, ("C4",))
     with pytest.raises(ValueError, match="matching running"):
         save_alerts(conn, [Alert("C4", "T", None, None, 1.0, None, None, {})],
                     other, run_id)

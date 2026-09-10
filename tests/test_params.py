@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 from kxsurv.params import load_params, params_hash, register, verify, ParamsDriftError
 
@@ -34,6 +36,15 @@ def test_register_rejects_changed_parameters_without_a_version_bump(conn):
     changed = {"version": "1.0.0", "c4": {"min_inversion_dollars": 0.02}}
     with pytest.raises(ParamsDriftError, match="bump"):
         register(conn, changed)
+
+
+def test_registered_parameter_history_cannot_be_edited_or_deleted(conn):
+    p = {"version": "immutable-1", "x": 1}
+    h = register(conn, p)
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        conn.execute("UPDATE params SET content = '{}' WHERE params_hash = ?", (h,))
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        conn.execute("DELETE FROM params WHERE params_hash = ?", (h,))
 
 
 def test_real_params_file_loads_and_has_all_five_controls():

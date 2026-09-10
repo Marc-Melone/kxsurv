@@ -62,6 +62,24 @@ def test_planted_one_sided_pressure_in_a_thin_market_fires(conn):
     assert len(out) == 1, "one-sided flow displacing price in a thin market must alert"
     assert out[0].evidence["imbalance_ratio"] == 1.0
     assert abs(out[0].evidence["displacement"] - 0.15) < 1e-9
+    assert out[0].score == out[0].evidence["displacement"]
+    assert out[0].threshold == P2["c2_prehalt"]["min_price_displacement"]
+    assert out[0].evidence["registered_gates"]["min_imbalance_ratio"] == 0.70
+
+
+def test_aggressive_no_buying_aligned_with_falling_yes_price_fires(conn):
+    _mk(conn, ["no"] * 4, [0.55, 0.50, 0.45, 0.40])
+    out = run(conn, P2)
+    assert len(out) == 1
+    assert out[0].evidence["signed_imbalance"] == -1.0
+    assert out[0].evidence["price_change"] < 0
+
+
+def test_exact_five_cent_displacement_meets_the_inclusive_floor(conn):
+    _mk(conn, ["yes"] * 4, [0.40, 0.41, 0.42, 0.45])
+    out = run(conn, P2)
+    assert len(out) == 1
+    assert out[0].score == 0.05
 
 
 def test_balanced_flow_does_not_fire(conn):

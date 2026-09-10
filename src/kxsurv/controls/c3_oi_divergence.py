@@ -68,7 +68,8 @@ def _populations(conn, p: dict) -> tuple[dict[str, list[dict]], dict[int, list[f
     """Build the exact within-tier population used by C3 scoring."""
     tiers = p["liquidity_tiers"]
     tickers = [r[0] for r in conn.execute(
-        "SELECT DISTINCT ticker FROM candles").fetchall()]
+        "SELECT DISTINCT c.ticker FROM candles c"
+        " JOIN markets m ON m.ticker = c.ticker").fetchall()]
     per_ticker: dict[str, list[dict]] = {}
     tier_pop: dict[int, list[float]] = {}
     for tk in tickers:
@@ -145,7 +146,8 @@ def _alert(ticker: str, rows: list[dict], p: dict) -> Alert:
             "peak_d": peak["d"], "peak_delta_oi": peak["delta_oi"],
             "liquidity_tier": peak["tier"],
             "span_hours": (rows[-1]["end_period_ts"] - rows[0]["end_period_ts"]) / 3600.0,
-            "base_rate_note": "flat-OI signature rate observed at 16.2-26.0%; "
-                              "public data does not label it benign; this is a "
-                              "screening proxy, not evidence",
+            "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in "
+                              "two cited market samples; public data does not "
+                              "label it benign; this is a screening proxy, not "
+                              "evidence",
         })

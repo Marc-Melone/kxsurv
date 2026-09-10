@@ -42,10 +42,10 @@ def test_liquidity_tiers_partition_by_open_interest():
 # alerts violated the intended semantics; one claimed 4 consecutive periods
 # spanning 863 hours.
 
-from kxsurv.db import upsert_candles
+from kxsurv.db import upsert_candles, upsert_markets
 from kxsurv.controls.c3_oi_divergence import coverage, run
 from kxsurv.params import register
-from tests.fixtures import candle
+from tests.fixtures import candle, market
 
 P = {"version": "t", "c3_oi_divergence": {
     "min_candle_volume": 50.0, "percentile_threshold": 0.0,
@@ -53,8 +53,13 @@ P = {"version": "t", "c3_oi_divergence": {
 H = 3600
 
 
+def _seed_market(conn):
+    upsert_markets(conn, [market("K1", "K1-E", 1.0)])
+
+
 def test_adjacent_hours_form_a_run(conn):
     register(conn, P)
+    _seed_market(conn)
     upsert_candles(conn, [
         candle("K1", 1 * H, 0, 500),
         candle("K1", 2 * H, 900, 500),     # flat OI, high volume
@@ -69,6 +74,7 @@ def test_a_36_day_gap_is_not_a_run(conn):
     """The real failure: KXFED-26SEP-T3.00 claimed 4 consecutive periods
     across 863 hours."""
     register(conn, P)
+    _seed_market(conn)
     upsert_candles(conn, [
         candle("K1", 1 * H, 0, 500),
         candle("K1", 2 * H, 900, 500),
@@ -79,6 +85,7 @@ def test_a_36_day_gap_is_not_a_run(conn):
 
 def test_a_single_missing_hour_breaks_the_run(conn):
     register(conn, P)
+    _seed_market(conn)
     upsert_candles(conn, [
         candle("K1", 1 * H, 0, 500),
         candle("K1", 2 * H, 900, 500),
@@ -97,6 +104,7 @@ def test_missing_predecessor_does_not_create_a_divergence_observation():
 
 def test_coverage_uses_the_same_population_as_control_scoring(conn):
     register(conn, P)
+    _seed_market(conn)
     upsert_candles(conn, [
         candle("K1", 1 * H, 0, 500),
         candle("K1", 2 * H, 900, 500),

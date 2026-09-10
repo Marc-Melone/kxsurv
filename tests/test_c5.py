@@ -53,7 +53,7 @@ def test_acronym_is_built_from_significant_words():
     assert acronym("Federal Reserve Board of Governors") == "FRBG"
 
 
-def test_an_acronym_and_its_long_form_are_recognised_as_one_entity():
+def test_an_acronym_and_its_long_form_form_a_candidate_group():
     groups = alias_groups(["Bureau of Labor Statistics", "BLS",
                            "Federal Reserve Board of Governors"])
     assert groups["BLS"] == groups["Bureau of Labor Statistics"]
@@ -66,7 +66,7 @@ def test_case_and_punctuation_do_not_create_a_separate_entity():
     assert len(set(groups.values())) == 1
 
 
-def test_run_flags_a_provider_declared_under_two_names(conn):
+def test_run_flags_candidate_duplicate_source_naming(conn):
     from kxsurv.params import register
     P = {"version": "t", "c5_settlement": {"inventory_only": True}}
     register(conn, P)
@@ -77,10 +77,12 @@ def test_run_flags_a_provider_declared_under_two_names(conn):
                  " WHERE series_ticker='KXU3'")
     conn.commit()
     out = run(conn, P)
-    aliases = [a for a in out if a.evidence.get("issue") == "provider declared under multiple names"]
+    aliases = [a for a in out
+               if a.evidence.get("issue") == "candidate duplicate settlement-source naming"]
     assert len(aliases) == 1
     assert set(aliases[0].evidence["declared_names"]) == {"BLS", "Bureau of Labor Statistics"}
     assert aliases[0].evidence["source_domains"] == ["www.bls.gov"]
+    assert "if provider identity is confirmed" in aliases[0].evidence["consequence"]
 
 
 def test_no_alias_alert_when_names_are_consistent(conn):
@@ -90,7 +92,8 @@ def test_no_alias_alert_when_names_are_consistent(conn):
     upsert_markets(conn, [market("KXCPI-26JUL-T0.1", "KXCPI-26JUL", 0.1)])
     build_inventory(conn, FakeApi(), ["KXCPI", "KXU3", "KXFED"])
     assert [a for a in run(conn, P)
-            if a.evidence.get("issue") == "provider declared under multiple names"] == []
+            if a.evidence.get("issue") ==
+            "candidate duplicate settlement-source naming"] == []
 
 
 # --- third review round (2026-09-07) ---------------------------------------
@@ -129,6 +132,19 @@ def test_normalised_concentration_unions_duplicate_alias_coverage(conn):
     assert concentration(conn, normalise=True) == [{
         "source_name": "Bureau of Labor Statistics", "series_count": 1,
         "market_count": 1, "declared_as": ["BLS", "Bureau of Labor Statistics"]}]
+
+
+def test_normalised_concentration_does_not_merge_an_acronym_collision(conn):
+    conn.executemany(
+        "INSERT INTO settlement_sources"
+        " (series_ticker, source_name, source_url, category, market_count)"
+        " VALUES (?, ?, ?, 'X', 0)",
+        [("S1", "Alpha Bureau", "https://alpha.example/a"),
+         ("S2", "AB", "https://unrelated.example/b")],
+    )
+    conn.commit()
+    rows = concentration(conn, normalise=True)
+    assert {row["source_name"] for row in rows} == {"Alpha Bureau", "AB"}
 
 
 def test_market_counts_are_live_not_frozen_at_inventory_time(conn):

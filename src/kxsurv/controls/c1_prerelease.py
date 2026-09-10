@@ -9,13 +9,16 @@ trade at $0.99 on the eventual winner is consensus, not information. The
 informed signature is aggressive flow toward the eventual outcome FROM AN
 EXECUTION PRICE THAT DID NOT ALREADY IMPLY IT, hence the surprise weighting.
 
-SAMPLE SIZE: 9 distinct information events across all five economic series
-(132 settled markets, but brackets within an event are not independent). C1
-makes NO population-level statistical claim. It is validated by fixture
-detection behaviour and analyst triage.
+SAMPLE SIZE: 5 distinct scheduled release timestamps represented by 9 settled
+event ladders across the five economic series (132 settled markets, but brackets
+within a ladder and ladders sharing a publication are not independent). C1 makes
+NO population-level statistical claim. It is validated by fixture detection
+behaviour and analyst triage.
 
-COVERAGE: C1 reads the trade tape, which Kalshi retains for ~66 days. Markets
-beyond that horizon cannot be scored and are skipped.
+COVERAGE: C1 requires retrieved trades in its test and comparison windows.
+Current ingestion combines Kalshi's live and historical public trade tiers;
+the saved 2026-09-07 snapshot used only the live tier and therefore has narrower
+C1 coverage than a newly acquired two-tier snapshot may have.
 """
 from __future__ import annotations
 
@@ -43,7 +46,8 @@ def aggressor_direction(taker_side: str, settled_yes: bool) -> int:
     return 1 if bought_yes == settled_yes else -1
 
 
-def informed_flow_score(trades: list[dict], p0: float, settled_yes: bool) -> float:
+def informed_flow_score(trades: list[dict], p0: float | None,
+                        settled_yes: bool) -> float:
     """Size-weighted correctness, discounted by each trade's execution price.
 
     `p0` is retained only as a fallback for legacy/unit-test rows that lack a
@@ -55,7 +59,12 @@ def informed_flow_score(trades: list[dict], p0: float, settled_yes: bool) -> flo
         return 0.0
     signed_surprise = 0.0
     for t in trades:
-        price = float(t.get("yes_price", p0))
+        raw_price = t.get("yes_price")
+        if raw_price is None:
+            if p0 is None:
+                raise ValueError("trade has no execution price or legacy fallback price")
+            raw_price = p0
+        price = float(raw_price)
         surprise = 1.0 - (price if settled_yes else 1.0 - price)
         signed_surprise += (float(t["count_fp"])
                             * aggressor_direction(taker_outcome_side(t), settled_yes)
@@ -72,9 +81,15 @@ def _iso(dt: datetime) -> str:
 
 
 def _trades_between(conn, ticker: str, start: datetime, end: datetime) -> list[dict]:
+    """Return trades in the half-open interval ``[start, end)``.
+
+    Adjacent current/null windows share boundaries. A closed interval on both
+    ends would count the same boundary trade twice and leak it between the test
+    window and its comparison population.
+    """
     cur = conn.execute(
         "SELECT count_fp, taker_outcome_side, yes_price FROM trades WHERE ticker = ?"
-        " AND created_time >= ? AND created_time <= ?",
+        " AND created_time >= ? AND created_time < ?",
         (ticker, _iso(start), _iso(end)))
     return [{"count_fp": r[0], "taker_outcome_side": r[1], "yes_price": r[2]}
             for r in cur.fetchall()]
@@ -104,16 +119,23 @@ def coverage(conn, params: dict) -> dict:
     """
     p = params["c1_prerelease"]
     L = timedelta(minutes=p["window_minutes"])
-    tally = {"considered": 0, "no_result": 0, "gate_blocked": 0,
-             "low_volume": 0, "no_p0": 0, "null_too_small": 0, "scored": 0}
+    tally = {"considered": 0, "release_time_unknown": 0,
+             "no_result": 0, "gate_blocked": 0,
+             "low_volume": 0, "null_too_small": 0, "scored": 0}
 
-    for event_ticker, halt_str in conn.execute(
-            "SELECT event_ticker, halt_time_utc FROM events"
+    for event_ticker, halt_str, release_str in conn.execute(
+            "SELECT event_ticker, halt_time_utc, release_time_utc FROM events"
             " WHERE halt_time_utc IS NOT NULL").fetchall():
         halt = _parse(halt_str)
         for m in ladder(conn, event_ticker):
             tk = m["ticker"]
             tally["considered"] += 1
+            # C1 is a pre-publication screen. A close time alone does not prove
+            # that an event has a scheduled information release; weather and
+            # other continuously resolving markets therefore stay out of scope.
+            if release_str is None:
+                tally["release_time_unknown"] += 1
+                continue
             if m["result"] not in ("yes", "no"):
                 tally["no_result"] += 1
                 continue
@@ -127,14 +149,10 @@ def coverage(conn, params: dict) -> dict:
             if sum(float(t["count_fp"]) for t in window) < p["min_window_volume"]:
                 tally["low_volume"] += 1
                 continue
-            if _mid_at(conn, tk, halt - L) is None:
-                tally["no_p0"] += 1
-                continue
             n = 0
             for i in range(1, p["null_windows"] + 1):
                 end = halt - L * i
-                if (_trades_between(conn, tk, end - L, end)
-                        and _mid_at(conn, tk, end - L) is not None):
+                if _trades_between(conn, tk, end - L, end):
                     n += 1
             if n < 3:
                 tally["null_too_small"] += 1
@@ -150,7 +168,18 @@ def run(conn, params: dict) -> list[Alert]:
 
     events = conn.execute(
         "SELECT event_ticker, halt_time_utc, release_time_utc FROM events"
-        " WHERE halt_time_utc IS NOT NULL").fetchall()
+        " WHERE halt_time_utc IS NOT NULL AND release_time_utc IS NOT NULL").fetchall()
+    # The effective sample unit is the scheduled publication, not the market or
+    # event ticker. CPI/CPIYOY and payroll/U3 ladders share releases and are not
+    # independent observations. Count only release times represented by at least
+    # one settled ladder, since unsettled future events cannot enter C1 scoring.
+    scheduled_release_population, settled_ladder_population = conn.execute(
+        "SELECT COUNT(DISTINCT e.release_time_utc), COUNT(DISTINCT e.event_ticker)"
+        " FROM events e WHERE e.halt_time_utc IS NOT NULL"
+        " AND e.release_time_utc IS NOT NULL AND EXISTS ("
+        " SELECT 1 FROM markets m WHERE m.event_ticker = e.event_ticker"
+        " AND m.floor_strike IS NOT NULL AND m.result IN ('yes', 'no'))"
+    ).fetchone()
 
     for event_ticker, halt_str, release_str in events:
         halt = _parse(halt_str)
@@ -163,7 +192,7 @@ def run(conn, params: dict) -> list[Alert]:
             if result not in ("yes", "no"):
                 continue
             # Skip markets blocked by the completeness gate or beyond the
-            # tape's retention horizon.
+            # available acquisition window.
             gate = conn.execute(
                 "SELECT complete, tape_volume FROM ingest_log WHERE ticker = ?",
                 (tk,)).fetchone()
@@ -175,9 +204,10 @@ def run(conn, params: dict) -> list[Alert]:
             volume = sum(float(t["count_fp"]) for t in window)
             if volume < p["min_window_volume"]:
                 continue
+            # Opening midpoint is retained as optional analyst context only.
+            # It is not an input to the corrected per-execution-price score and
+            # therefore cannot be a hidden eligibility gate.
             p0 = _mid_at(conn, tk, halt - L)
-            if p0 is None:
-                continue
             score = informed_flow_score(window, p0, settled_yes)
 
             # Null: same-length windows earlier in this market's own history.
@@ -187,10 +217,7 @@ def run(conn, params: dict) -> list[Alert]:
                 w = _trades_between(conn, tk, end - L, end)
                 if not w:
                     continue
-                q0 = _mid_at(conn, tk, end - L)
-                if q0 is None:
-                    continue
-                null.append(informed_flow_score(w, q0, settled_yes))
+                null.append(informed_flow_score(w, None, settled_yes))
             if len(null) < 3:
                 continue
 
@@ -207,8 +234,12 @@ def run(conn, params: dict) -> list[Alert]:
                         "surprise_price": "per-trade execution price",
                         "halt_to_release_minutes": gap,
                         "trade_count": len(window), "null_samples": len(null),
+                        "scheduled_release_population": scheduled_release_population,
+                        "settled_ladder_population": settled_ladder_population,
                         "limitation": "cannot distinguish superior public-"
                                       "information processing from misuse of "
-                                      "non-public information; n=9 events",
+                                      "non-public information; candidate rates "
+                                      "are descriptive, not calibrated false-"
+                                      "positive rates",
                     }))
     return alerts
