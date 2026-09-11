@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kxsurv — surveillance results</title>
+<meta name="description" content="Published results of a market-surveillance methodology demonstration over Kalshi public market data.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>kxsurv <span>— surveillance results</span></h1>
+    <p>Five screening controls over KalshiEX LLC public market data, mapped to CFTC DCM Core Principles (17 CFR Part 38).</p>
+  </header>
+
+  <p class="notice" id="disclaimer"></p>
+
+  <main id="main" hidden>
+    <div id="warnings"></div>
+
+    <section>
+      <h2>Run provenance</h2>
+      <div class="prov">
+        <div class="prov-head">
+          <span class="prov-run" id="run-id"></span>
+          <span class="ok" id="run-status"></span>
+          <span class="ok" id="run-params"></span>
+        </div>
+        <dl class="prov-grid" id="prov-grid"></dl>
+      </div>
+    </section>
+
+    <section>
+      <h2>Triage funnel <span class="h2note" id="funnel-note"></span></h2>
+      <div class="funnel-total" id="funnel-total"></div>
+      <div class="bar" id="funnel-bar"></div>
+      <div class="legend" id="funnel-legend"></div>
+    </section>
+
+    <section>
+      <h2>By control</h2>
+      <div class="scroll"><table id="control-table"></table></div>
+    </section>
+
+    <section>
+      <h2>Coverage <span class="h2note">what was screened, and what was not</span></h2>
+      <div class="cov" id="coverage"></div>
+    </section>
+
+    <section>
+      <h2>Alerts <span class="h2note" id="alert-note"></span></h2>
+      <div class="filters" id="filter-control"></div>
+      <div class="filters" id="filter-action"></div>
+      <div id="alerts"></div>
+    </section>
+
+    <section>
+      <h2>Limitations</h2>
+      <ol class="limits">
+        <li>No counterparty identity — the binding constraint on every participant-conduct screen.</li>
+        <li>C1 covers five distinct scheduled releases represented by nine settled ladders, and makes no population-level claim.</li>
+        <li>C3 observes aggregate volume and open interest, not beneficial ownership.</li>
+        <li>C4 scopes to <code>strike_type = "greater"</code> ladders only.</li>
+        <li>C5 has no independent corroborating reference-data feed and performs no settlement-value divergence monitoring.</li>
+        <li>Order-book reconstruction, spoofing, layering and account-level linkage are out of scope.</li>
+      </ol>
+    </section>
+
+    <footer>
+      <p id="footer-provenance"></p>
+      <p>
+        <a href="https://github.com/Marc-Melone/kxsurv">Source repository</a> ·
+        <a href="https://github.com/Marc-Melone/kxsurv/blob/main/SURVEILLANCE_FRAMEWORK.md">Methodology &amp; governance</a> ·
+        <a href="https://github.com/Marc-Melone/kxsurv/blob/main/SURVEILLANCE_PLAN.md">Parameter registration</a>
+      </p>
+    </footer>
+  </main>
+
+  <div id="error" class="err" hidden></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

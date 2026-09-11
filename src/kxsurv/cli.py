@@ -17,6 +17,7 @@ from .runs import (begin_run, begin_snapshot_refresh, fail_run,
                    reset_snapshot_inputs, verify_snapshot_ready)
 from .controls.c1_prerelease import coverage as c1_coverage
 from .controls.c3_oi_divergence import coverage as c3_coverage
+from .export import write_export
 from .report import funnel_markdown
 
 SERIES = ["KXCPI", "KXCPIYOY", "KXPAYROLLS", "KXU3", "KXFED"]
@@ -120,11 +121,25 @@ def _selected_series(series) -> list[str]:
 
 
 def main(skip_ingest: bool = False, register_params: bool = False,
-         db_path: str = DEFAULT_DB_PATH, series=None) -> int:
+         db_path: str = DEFAULT_DB_PATH, series=None,
+         export_path: str | None = None, export_run_id: int | None = None) -> int:
     params = load_params("config/params.yaml")
     selected_series = _selected_series(series)
     conn = connect(db_path)
     init_schema(conn)
+    if export_path:
+        # Publishing reads an existing run. It never registers parameters,
+        # contacts the API, or opens a run of its own.
+        doc = write_export(conn, export_path, export_run_id, params)
+        run = doc["run"]
+        print("exported run {} ({} alerts, {} triaged) to {}".format(
+            run["run_id"], doc["funnel"]["generated"],
+            doc["funnel"]["triaged"], export_path))
+        if run["code_drift"]:
+            print("warning: working tree code hash differs from the run's")
+        if run["source_dirty"]:
+            print("warning: working tree has uncommitted changes")
+        return 0
     if register_params:
         register(conn, params)
         print("registered parameter version {}".format(params["version"]))
@@ -188,11 +203,16 @@ if __name__ == "__main__":
                        help="run locally against an existing snapshot; make no API calls")
     group.add_argument("--register-params", action="store_true",
                        help="explicitly register the current new parameter version, then exit")
+    group.add_argument("--export", metavar="PATH", default=None,
+                       help="write a complete run to PATH as a published results artifact")
     parser.add_argument("--db", default=DEFAULT_DB_PATH,
                         help="SQLite database path (default: %(default)s)")
+    parser.add_argument("--run", type=int, default=None, metavar="N",
+                        help="run to export (default: the latest complete run)")
     parser.add_argument("--series", nargs="+", default=None, metavar="TICKER",
                         help="exact database series scope (ingested unless --skip-ingest) "
                              "(default: the five registered series)")
     args = parser.parse_args()
     sys.exit(main(skip_ingest=args.skip_ingest, register_params=args.register_params,
-                  db_path=args.db, series=args.series))
+                  db_path=args.db, series=args.series,
+                  export_path=args.export, export_run_id=args.run))

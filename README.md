@@ -14,6 +14,16 @@ Market Core Principle (17 CFR Part 38).
 > or establish intent. A participant-facing output is therefore an alert
 > warranting investigation, never a finding.
 
+## Published results
+
+**[Live results viewer → marc-melone.github.io/kxsurv](https://marc-melone.github.io/kxsurv/)**
+
+The complete triaged output of the current saved-snapshot run: every alert with
+its evidence and written disposition, the screened-population coverage for each
+control, and the run's parameter, input and code fingerprints. The viewer is a
+static page and read-only by construction — it cannot start a run, reach
+Kalshi's API, or record a disposition.
+
 ## Current status
 
 **v1.1.0 is a corrective release, not prospective validation.** It changes
@@ -29,11 +39,17 @@ evaluation requires data not used to design or correct that release.
 
 The databases are deliberately excluded from Git. A fresh clone can reproduce
 the tests and pipeline mechanics and can create a **new** public-API measurement,
-but it cannot reproduce a dated result table from this repository alone. Public
-data evolve, the live/historical partition cutoff moves, and a new ingest may
-produce different coverage and alert counts. Exact historical counts require
-the retained snapshot identified by its input hash, or a future published
-snapshot artifact.
+but it cannot re-derive a dated result table from raw data in this repository
+alone. Public data evolve, the live/historical partition cutoff moves, and a new
+ingest may produce different coverage and alert counts.
+
+Exact historical counts therefore ship as a **published snapshot artifact**:
+`site/data/` holds the derived results of the current run — alerts, evidence,
+dispositions, coverage and provenance — identified by its parameter, input and
+code fingerprints and its source commit. Raw trades, candles and market rows
+remain gitignored; only derived results are published. The exporter refuses to
+write an artifact for any run that is not `complete`, so a published table
+cannot describe an unfinished or failed run.
 
 Current ingestion follows Kalshi's documented
 [live/historical data partition](https://docs.kalshi.com/getting_started/historical_data):
@@ -201,7 +217,8 @@ a fresh clone.
 | `SURVEILLANCE_FRAMEWORK.md` | Current v1.1 methodology, governance, lineage, and limitations |
 | `SURVEILLANCE_PLAN.md` | v1.1 parameter-registration record and threshold rationale |
 | `cases/` | Selected analyst records from the saved-snapshot corrective run |
-| `docs/superpowers/` | Archived v1.0 design and implementation material, not operating documentation |
+| `docs/archive/` | Archived v1.0 design and implementation material, not operating documentation |
+| `site/` | Static results viewer and the published run artifact it renders |
 
 ## Limitations
 

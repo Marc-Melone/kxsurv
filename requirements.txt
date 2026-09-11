@@ -1,3 +1,8 @@
-requests>=2.31
-PyYAML>=6.0
-pytest>=8.0
+# Pinned exactly. A program that fingerprints its inputs and its detector code
+# but floats its dependencies cannot claim a reproducible result: a later minor
+# release of any of these can change behaviour without changing any fingerprint.
+# Dependency versions are NOT part of the run's code_hash; this file is the
+# record. Bump deliberately, then re-run and re-export.
+requests==2.34.2
+PyYAML==6.0.3
+pytest==9.1.1
