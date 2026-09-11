@@ -1,12 +1,24 @@
-params version: 1.1.0
-{'series': 'KXGDP', 'markets': 51, 'trades': 6770, 'candles': 19013, 'complete_markets': 51}
-{'series': 'KXHIGHNY', 'markets': 414, 'trades': 597455, 'candles': 15502, 'complete_markets': 407}
-{'series': 'KXFEDDECISION', 'markets': 65, 'trades': 98228, 'candles': 54354, 'complete_markets': 64}
-events: 88
-C4: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
-C3: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
-C1: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
-C2: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
-C5: ERROR TypeError: run_control() missing 1 required positional argument: 'run_id'
-run_id: 1
-OOS COMPLETE
+# Development challenge run — corrected controls
+
+Purpose: remediation/challenge corpus, not independent out-of-sample validation
+Command: PYTHONPATH=src .venv/bin/python -m kxsurv.cli --skip-ingest --db out/oos.db --series KXGDP KXHIGHNY KXFEDDECISION
+Source commit: e0d24a2
+Run ID: 4
+Parameter version: 1.1.0
+Parameters SHA-256: b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057
+Input fingerprint: c997f294d10ce29f513cd1ce5df068fb63699fe1c04bb75c5c5c4eae522a8c68
+Code fingerprint: 60702ce0b3239f50667f742822d702550e47a7436e2d04d621c3c6653a556b90
+Started: 2026-09-11T14:02:32.210847+00:00
+Finished: 2026-09-11T14:02:39.134607+00:00
+Status: complete (5/5 controls)
+
+Control results:
+- C1: 0 (396 considered markets; all 396 excluded because no source-coded publication time)
+- C2: 0
+- C3: 82 (16,984 scoreable observations; 846 percentile-qualified before persistence)
+- C4: 0
+- C5: 0
+
+Triage status: 82 generated, 0 triaged, 82 untriaged. This corpus exposed defects
+during development, so its outputs are not presented as prospective performance.
+The database itself is gitignored; this log identifies but does not reproduce it.

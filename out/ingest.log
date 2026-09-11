@@ -1,3 +1,7 @@
+# Historical 2026-09-07 live-endpoint ingestion console output.
+# The complete_markets field below used the superseded full-range comparison
+# between unequal trade/candle acquisition windows; it is not current
+# completeness evidence. See SURVEILLANCE_FRAMEWORK.md and saved-snapshot.log.
 {'series': 'KXCPI', 'markets': 59, 'trades': 25344, 'candles': 44847, 'complete_markets': 26}
 {'series': 'KXCPIYOY', 'markets': 110, 'trades': 31368, 'candles': 55728, 'complete_markets': 18}
 {'series': 'KXPAYROLLS', 'markets': 71, 'trades': 7419, 'candles': 20253, 'complete_markets': 55}

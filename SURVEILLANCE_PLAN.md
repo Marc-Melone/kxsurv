@@ -7,8 +7,11 @@
 This document records the parameter configuration that must be explicitly
 registered before a v1.1 control run. It is not a claim that v1.1 was selected
 prospectively: v1.1 corrects defects discovered while reviewing v1.0 output.
-Re-analysis of the saved v1.0 database is a regression check; the first new
-ingestion after registration is the prospective v1.1 evaluation.
+Re-analysis of the saved v1.0 database is a regression check. A separate
+three-series challenge corpus subsequently prompted further code corrections
+and is remediation data, not validation of the resulting code. Prospective
+evaluation begins only with data not used to design or correct the source
+release being evaluated.
 
 The canonical v1.1 configuration hash is:
 
@@ -56,10 +59,20 @@ post-review algorithm changes or to validate a new version prospectively.
 | C3 | `epsilon` | 1.0 | Stabilizes the divergence denominator when OI is unchanged. |
 | C4 | `min_inversion_dollars` | 0.01 | Minimum price inversion. |
 | C4 | `require_exceeds_half_spread` | true | Excludes an inversion contained in the combined half-spread. |
-| C4 | `min_persistence_snapshots` | 2 | Requires the same strike pair across adjacent snapshots. |
+| C4 | `min_persistence_snapshots` | 2 | Requires the same strike pair across adjacent hourly end-period buckets. |
 | C5 | `inventory_only` | true | Restricts C5 to declared-source inventory/metadata and ladder-result consistency; no independent-feed divergence monitor is implemented. |
 
 ## Method constraints carried with the configuration
+
+### Snapshot acquisition
+
+A full ingest is a replacement, not an additive update: after claiming a unique
+refresh generation, it clears the prior detector inputs, retains markets whose
+close is within or after the 90-day observation window, and retrieves trades
+and candles inside that window. Kalshi's live and historical market lists are
+unioned, candlesticks are routed by the market's storage tier, and trades are
+merged by trade ID across both tiers. A partial or conflicting acquisition
+leaves the snapshot non-ready and cannot be evaluated with `--skip-ingest`.
 
 ### Trade direction
 
@@ -72,9 +85,17 @@ flow. `taker_book_side` is not used as outcome direction.
 ### C1 execution-price weighting
 
 C1 discounts each trade by the outcome probability implied by that trade's own
-YES execution price. The start-of-window midpoint is a coverage/context check,
-not a substitute for an execution price. This v1.1 correction changes the
-saved-snapshot candidate set and requires a new disposition process.
+YES execution price. The start-of-window midpoint is optional analyst context;
+it does not affect eligibility or substitute for an execution price. This v1.1
+correction changes the saved-snapshot candidate set and requires a new
+disposition process.
+
+### C1 applicability
+
+C1 requires a known halt time and a publication time materialized from the
+source-coded release schedule. A market close alone does not establish a
+scheduled information event. Series absent from that schedule are reported as
+out of scope rather than scored as pre-release markets.
 
 ### C2 sign alignment
 
@@ -89,26 +110,37 @@ candle and requires qualifying observations to persist across adjacent hours.
 Its flat-OI frequency is an observed non-specific signature rate, not a benign
 base rate: the saved-snapshot examples are 26.0% (44/169) and 16.2% (12/74).
 
+### C4 monetary boundaries
+
+C4 converts stored quote values to decimal-safe representations before applying
+the inclusive minimum-inversion and strict combined-half-spread conditions.
+Binary floating-point noise must not turn equality with the spread boundary into
+an exceedance. Only `greater` contracts enter the monotone ladder.
+
 ### C5 scope
 
 C5 does not compare settlement values to an independent feed. It inventories
 declared sources, flags corroborated naming aliases, detects missing declared
 sources, and checks settled `greater` ladders for logical contradictions. An
-acronym match is only a candidate alias; it must share one normalized declared
-source URL domain before alerting.
+acronym match is only a candidate alias; every candidate name must independently
+declare the same single valid hostname before alerting.
 
 ## Known validation limits
 
-1. C1's effective unit is the information event: the saved snapshot contains
-   nine, not 132 independent observations.
+1. C1's effective unit is the distinct scheduled publication: the saved snapshot
+   contains five such releases represented by nine settled ladders and 132
+   settled markets. Ladders sharing a publication are not independent.
 2. C1 has no absolute score floor and permits a three-sample minimum null under
    the current implementation. Its 95th-percentile score must not be described
    as a calibrated 5% false-positive rate.
 3. C3 uses aggregate open interest and cannot establish common beneficial
    ownership or self-trading.
-4. The v1.1 saved-snapshot re-analysis is not prospective validation. Publish a
-   new public-API run separately, with its run ID, input fingerprint, parameter
-   hash, source release, and freshly recorded dispositions.
+4. Neither the saved-snapshot re-analysis nor the three-series challenge corpus
+   is prospective validation of the resulting code. Publish a later public-API
+   run separately, with its run ID, input fingerprint, parameter hash, source
+   release, and freshly recorded dispositions. Because public data and the
+   live/historical partition cutoff evolve, a fresh ingest is a new measurement;
+   it will not necessarily reproduce either historical count.
 
 
 ---
@@ -124,4 +156,8 @@ when any given run executed.
 | 1.0.0 | 2026-09-07 17:46 UTC | Initial registration, before any control ran. |
 | 1.1.0 | 2026-09-07 22:42 UTC | `c5_settlement.inventory_only` → `true`; unused `divergence_tolerance` removed. C5 declares itself inventory-and-consistency only, because no independent corroborating settlement feed is ingested. **No detection threshold changed** — every window, percentile, volume floor and persistence value is unchanged from 1.0.0. |
 
-No change in either version was made after observing results it would affect.
+No configured detection threshold was silently retuned to obtain the reported
+results. Algorithm and scope corrections were made after observing outputs that
+they affected; they are disclosed as corrective work and identified by source-
+code fingerprints and commits independently of parameter-set version `1.1.0`.
+They require later unseen data for prospective evaluation.
