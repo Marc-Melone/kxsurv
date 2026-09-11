@@ -87,8 +87,7 @@ def test_failed_control_has_its_own_audit_record(conn):
 
 
 def test_saving_the_same_alert_twice_fails_closed_without_a_second_row(conn):
-    """Re-running controls previously doubled the alert table: 51 alerts
-    became 102, so the published funnel figures no longer matched the data."""
+    """Re-running one control must not duplicate its alert rows."""
     register(conn, P)
     run_id = begin_run(conn, P, ("C4",))
     a = Alert("C4", "KXCPI-26SEP", "1000", "2000", 0.05, 99.0, 0.01, {"m": 1})

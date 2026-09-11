@@ -38,9 +38,8 @@ def test_liquidity_tiers_partition_by_open_interest():
 
 # --- temporal adjacency (fix 2026-09-07) -----------------------------------
 # The first implementation counted "consecutive periods" over the volume-
-# filtered list, so two candles 36 days apart counted as consecutive. 88 of 102
-# alerts violated the intended semantics; one claimed 4 consecutive periods
-# spanning 863 hours.
+# filtered list, so observations separated by multi-day gaps counted as
+# consecutive.
 
 from kxsurv.db import upsert_candles, upsert_markets
 from kxsurv.controls.c3_oi_divergence import coverage, run
@@ -71,8 +70,7 @@ def test_adjacent_hours_form_a_run(conn):
 
 
 def test_a_36_day_gap_is_not_a_run(conn):
-    """The real failure: KXFED-26SEP-T3.00 claimed 4 consecutive periods
-    across 863 hours."""
+    """A multi-day gap must not satisfy the persistence requirement."""
     register(conn, P)
     _seed_market(conn)
     upsert_candles(conn, [

@@ -27,6 +27,9 @@ _SNAPSHOT_TABLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
 )
 
 _READY_SNAPSHOT_STATUSES = frozenset({"ready", "legacy_ready"})
+_SNAPSHOT_REPLACEMENT_TABLES = (
+    "ingest_log", "trades", "candles", "events", "settlement_sources", "markets",
+)
 
 
 def input_hash(conn) -> str:
@@ -88,6 +91,29 @@ def begin_snapshot_refresh(conn) -> str:
         raise
     conn.commit()
     return token
+
+
+def reset_snapshot_inputs(conn, token: str) -> None:
+    """Clear the prior raw snapshot for the refresh generation owned by ``token``.
+
+    A refresh represents one bounded acquisition, not an additive cache.  Runs,
+    alerts, dispositions, and parameter registrations remain as the audit trail;
+    only the mutable detector-input tables are replaced.
+    """
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        state = conn.execute(
+            "SELECT status, refresh_token FROM snapshot_state WHERE state_id = 1"
+        ).fetchone()
+        if state != ("refreshing", token):
+            raise RuntimeError(
+                "cannot reset snapshot inputs for a refresh not owned by this token")
+        for table in _SNAPSHOT_REPLACEMENT_TABLES:
+            conn.execute("DELETE FROM {}".format(table))
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
 
 
 def finish_snapshot_refresh(conn, token: str) -> None:

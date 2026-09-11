@@ -68,10 +68,10 @@ def test_exact_one_cent_inversion_still_meets_the_minimum_without_spread_gate():
 
 # --- period alignment (fix 2026-09-07) -------------------------------------
 # An earlier implementation took each strike's most recent quote independently.
-# Across 28 events, 12 had strike quotes spanning >24h (worst: 194h), so the
-# control compared a strike quoted eight days ago against one quoted an hour
-# ago. A shared hourly endpoint removes that mismatch but does not prove the
-# underlying quote updates happened simultaneously within the period.
+# Across 28 events, 12 assembled ladders from strike quotes spanning >24h
+# (worst event span: 194h), and adjacent strikes could be separated by days. A
+# shared hourly endpoint removes that mismatch but does not prove the underlying
+# quote updates happened simultaneously within the period.
 
 from kxsurv.db import upsert_markets, upsert_candles
 from kxsurv.controls.c4_monotonicity import snapshots, run
@@ -102,7 +102,8 @@ def test_strike_quoted_in_a_different_period_is_not_compared(conn):
     _ladder(conn)
     upsert_candles(conn, [
         candle("KXT-26SEP-T0.1", 1000, 0, 0, bid=0.90, ask=0.92),
-        candle("KXT-26SEP-T0.2", 9000, 0, 0, bid=0.99, ask=0.99),  # 8 days later
+        candle("KXT-26SEP-T0.2", 1000 + 8 * 86400, 0, 0,
+               bid=0.99, ask=0.99),  # 8 days later
     ])
     for ts, rows in snapshots(conn, "KXT-26SEP"):
         assert len(rows) == 1, "strikes from different periods must not co-occur"

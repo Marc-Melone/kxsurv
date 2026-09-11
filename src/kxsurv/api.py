@@ -87,9 +87,66 @@ class KalshiPublic:
         return self._get("/markets/" + ticker).get("market", {})
 
     def markets(self, **filters) -> list[dict]:
+        """Return the complete live/historical market union for a scoped query.
+
+        Kalshi partitions settled markets by settlement time.  The ingestion
+        path scopes this call by one ``series_ticker``, which is supported by
+        both endpoints.  Unsupported live-only filters fail closed whenever
+        historical rows could be relevant rather than silently returning a
+        partial market universe.
+        """
         params = {"limit": 200}
         params.update({k: v for k, v in filters.items() if v is not None})
-        return self._paginate("/markets", "markets", params)
+        live = self._paginate("/markets", "markets", params)
+
+        status = filters.get("status")
+        include_historical = status in (None, "settled", "all")
+        historical: list[dict] = []
+        if include_historical:
+            supported = {"tickers", "event_ticker", "series_ticker", "mve_filter"}
+            unsupported = sorted(
+                key for key, value in filters.items()
+                if value is not None and key not in supported and key != "status"
+            )
+            if unsupported:
+                raise ValueError(
+                    "cannot produce a complete historical market union with "
+                    "unsupported filter(s): {}".format(", ".join(unsupported)))
+            exclusive = [key for key in ("tickers", "event_ticker", "series_ticker")
+                         if filters.get(key) is not None]
+            if len(exclusive) > 1:
+                raise ValueError(
+                    "historical market filters are mutually exclusive: {}"
+                    .format(", ".join(exclusive)))
+            historical_params = {"limit": 200}
+            historical_params.update({
+                key: value for key, value in filters.items()
+                if value is not None and key in supported
+            })
+            historical = self._paginate(
+                "/historical/markets", "markets", historical_params)
+
+        by_ticker: dict[str, dict] = {}
+        detector_fields = ("event_ticker", "title", "status", "result",
+                           "close_time", "floor_strike", "strike_type")
+        for source, rows in (("historical", historical), ("live", live)):
+            for raw in rows:
+                ticker = raw.get("ticker")
+                if not isinstance(ticker, str) or not ticker:
+                    raise RuntimeError(
+                        "{} market response omitted a non-empty ticker".format(source))
+                row = dict(raw)
+                prior = by_ticker.get(ticker)
+                if prior is not None:
+                    old = tuple(prior.get(field) for field in detector_fields)
+                    new = tuple(row.get(field) for field in detector_fields)
+                    if old != new:
+                        raise RuntimeError(
+                            "live and historical endpoints disagree for market {}"
+                            .format(ticker))
+                row["_kxsurv_historical"] = source == "historical"
+                by_ticker[ticker] = row
+        return [by_ticker[ticker] for ticker in sorted(by_ticker)]
 
     def trades(self, ticker: str | None = None, limit: int = 1000,
                min_ts: int | None = None, max_ts: int | None = None) -> list[dict]:
@@ -123,10 +180,45 @@ class KalshiPublic:
         return sorted(by_id.values(), key=lambda row: (
             str(row.get("created_time", "")), row["trade_id"]))
 
+    @staticmethod
+    def _canonical_candlestick(raw: dict) -> dict:
+        """Normalize live and historical response field names.
+
+        The historical endpoint documents legacy ``volume``/``close`` names,
+        while the live endpoint uses ``volume_fp``/``close_dollars``.  Detector
+        storage accepts one canonical shape so a historical candle cannot be
+        silently converted to zero volume or a null quote.
+        """
+        row = dict(raw)
+        for canonical, legacy in (("volume_fp", "volume"),
+                                  ("open_interest_fp", "open_interest")):
+            value = row.get(canonical, row.get(legacy))
+            if value is None:
+                raise RuntimeError(
+                    "candlestick omitted required field {}".format(canonical))
+            row[canonical] = value
+        if row.get("end_period_ts") is None:
+            raise RuntimeError("candlestick omitted required field end_period_ts")
+        for side in ("yes_bid", "yes_ask", "price"):
+            values = row.get(side)
+            if not isinstance(values, dict):
+                continue
+            normalized = dict(values)
+            for field in ("open", "low", "high", "close"):
+                dollars = "{}_dollars".format(field)
+                if normalized.get(dollars) is None and normalized.get(field) is not None:
+                    normalized[dollars] = normalized[field]
+            row[side] = normalized
+        return row
+
     def candlesticks(self, series: str, ticker: str, start_ts: int,
-                     end_ts: int, period_interval: int = 60) -> list[dict]:
+                     end_ts: int, period_interval: int = 60,
+                     historical: bool = False) -> list[dict]:
+        path = ("/historical/markets/{}/candlesticks".format(ticker)
+                if historical else
+                "/series/{}/markets/{}/candlesticks".format(series, ticker))
         d = self._get(
-            "/series/{}/markets/{}/candlesticks".format(series, ticker),
-            {"start_ts": start_ts, "end_ts": end_ts,
-             "period_interval": period_interval})
-        return d.get("candlesticks", []) or []
+            path, {"start_ts": start_ts, "end_ts": end_ts,
+                   "period_interval": period_interval})
+        return [self._canonical_candlestick(row)
+                for row in (d.get("candlesticks", []) or [])]

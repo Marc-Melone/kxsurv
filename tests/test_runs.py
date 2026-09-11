@@ -7,7 +7,8 @@ from kxsurv.db import connect, init_schema
 from kxsurv.params import params_hash, register
 from kxsurv.runs import (begin_run, begin_snapshot_refresh, fail_run,
                          fail_snapshot_refresh, finish_run, finish_snapshot_refresh,
-                         input_hash, latest_run_id, verify_snapshot_ready)
+                         input_hash, latest_run_id, reset_snapshot_inputs,
+                         verify_snapshot_ready)
 from kxsurv.triage import funnel
 
 
@@ -161,6 +162,38 @@ def test_only_the_refresh_owner_can_finish_or_fail_and_overlap_is_rejected(conn)
     assert conn.execute(
         "SELECT status, refresh_token, generation FROM snapshot_state"
     ).fetchone() == ("ready", token, 1)
+
+
+def test_refresh_owner_replaces_raw_inputs_but_preserves_audit_tables(conn):
+    register(conn, P)
+    conn.execute(
+        "INSERT INTO markets (ticker, event_ticker, series_ticker)"
+        " VALUES ('T', 'E', 'S')")
+    conn.execute(
+        "INSERT INTO events (event_ticker, series_ticker) VALUES ('E', 'S')")
+    conn.execute(
+        "INSERT INTO candles (ticker, end_period_ts, volume_fp, open_interest_fp)"
+        " VALUES ('T', 1, 1, 1)")
+    conn.execute(
+        "INSERT INTO ingest_log (ticker, tape_volume, candle_volume, complete)"
+        " VALUES ('T', 0, 1, 1)")
+    conn.execute(
+        "INSERT INTO settlement_sources (series_ticker, source_name)"
+        " VALUES ('S', 'Source')")
+    conn.commit()
+
+    token = begin_snapshot_refresh(conn)
+    with pytest.raises(RuntimeError, match="not owned"):
+        reset_snapshot_inputs(conn, "wrong-token")
+    assert conn.execute("SELECT COUNT(*) FROM markets").fetchone()[0] == 1
+
+    reset_snapshot_inputs(conn, token)
+    for table in ("markets", "events", "candles", "ingest_log",
+                  "settlement_sources", "trades"):
+        assert conn.execute(
+            "SELECT COUNT(*) FROM {}".format(table)).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM params").fetchone()[0] == 1
+    finish_snapshot_refresh(conn, token)
 
 
 def test_two_database_connections_cannot_own_the_same_refresh(tmp_path):

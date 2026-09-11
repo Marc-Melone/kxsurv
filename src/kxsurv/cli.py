@@ -14,7 +14,7 @@ from .ingest import ingest_series
 from .params import load_params, register, verify
 from .runs import (begin_run, begin_snapshot_refresh, fail_run,
                    fail_snapshot_refresh, finish_run, finish_snapshot_refresh,
-                   verify_snapshot_ready)
+                   reset_snapshot_inputs, verify_snapshot_ready)
 from .controls.c1_prerelease import coverage as c1_coverage
 from .controls.c3_oi_divergence import coverage as c3_coverage
 from .report import funnel_markdown
@@ -136,6 +136,7 @@ def main(skip_ingest: bool = False, register_params: bool = False,
     if not skip_ingest:
         refresh_token = begin_snapshot_refresh(conn)
         try:
+            reset_snapshot_inputs(conn, refresh_token)
             api = KalshiPublic()
             for s in selected_series:
                 result = ingest_series(conn, api, s)

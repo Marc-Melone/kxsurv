@@ -108,9 +108,9 @@ def run(conn, params: dict) -> list[Alert]:
     per_ticker, tier_pop = _populations(conn, p)
 
     # Pass 2: alert on runs that clear the tier percentile AND are adjacent in
-    # time. Adjacency is the point of a persistence requirement -- counting
-    # consecutive entries in the volume-filtered list let candles 36 days apart
-    # count as "consecutive" (88 of 102 alerts, corrected 2026-09-07).
+    # time. Adjacency is the point of a persistence requirement -- the earlier
+    # implementation let observations separated by multi-day gaps count as
+    # "consecutive."
     alerts: list[Alert] = []
     for tk, rows in per_ticker.items():
         run_rows: list[dict] = []

@@ -147,6 +147,28 @@ def test_normalised_concentration_does_not_merge_an_acronym_collision(conn):
     assert {row["source_name"] for row in rows} == {"Alpha Bureau", "AB"}
 
 
+def test_alias_without_a_domain_cannot_borrow_the_other_names_domain(conn):
+    from kxsurv.params import register
+
+    params = {"version": "missing-domain", "c5_settlement": {"inventory_only": True}}
+    register(conn, params)
+    upsert_markets(conn, [market("KXQ-26JUL-T1", "KXQ-26JUL", 1.0)])
+    conn.executemany(
+        "INSERT INTO settlement_sources"
+        " (series_ticker, source_name, source_url, category, market_count)"
+        " VALUES (?, ?, ?, 'X', 1)",
+        [("KXQ", "Bureau of Labor Statistics", "https://www.bls.gov/a"),
+         ("KXQ", "BLS", None)],
+    )
+    conn.commit()
+    assert [a for a in run(conn, params)
+            if a.evidence.get("issue") ==
+            "candidate duplicate settlement-source naming"] == []
+    assert {row["source_name"] for row in concentration(conn, normalise=True)} == {
+        "Bureau of Labor Statistics", "BLS",
+    }
+
+
 def test_market_counts_are_live_not_frozen_at_inventory_time(conn):
     """market_count was read at build_inventory time; markets ingested later
     left the figure stale. It is now computed by join at report time."""

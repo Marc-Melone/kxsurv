@@ -20,10 +20,10 @@ def check_completeness(conn, ticker: str, tolerance_pct: float = 2.0):
     The saved 2026-09-07 snapshot was collected from the live trade endpoint
     only: its first retrieved trade was about 66 days old while candlesticks
     reached about 89 days. Comparing those unlike acquisition windows produced
-    spurious failures on 261 of 408 markets. Current ingestion queries both
-    Kalshi's live and historical public trade tiers. Reconciliation is still
-    measured only from the first retrieved trade forward so a never-traded
-    prefix is not mistaken for missing data.
+    spurious failures on 261 of 408 markets. Current ingestion uses both
+    Kalshi market/candlestick storage tiers and both public trade tiers.
+    Reconciliation is still measured only from the first retrieved trade
+    forward so a never-traded prefix is not mistaken for missing data.
 
     A market with candle volume but no tape at all sits beyond the horizon.
     That is a coverage fact, not a truncation failure: C3 reads candles and can
@@ -66,19 +66,35 @@ def check_completeness(conn, ticker: str, tolerance_pct: float = 2.0):
 
 
 def ingest_series(conn, api, series_ticker: str, days: int = 90) -> dict:
-    """Ingest every market in a series plus its tape and candles."""
-    mkts = api.markets(series_ticker=series_ticker)
-    upsert_markets(conn, [dict(m, series_ticker=series_ticker) for m in mkts])
+    """Ingest one series into an already reset bounded snapshot.
 
+    ``api.markets`` returns both Kalshi storage tiers.  The list endpoints do
+    not share a close-time filter, so enforce the requested acquisition window
+    locally before making one tape/candle request per market.
+    """
     end_ts = int(time.time())
     start_ts = end_ts - days * 86400
+    candidates = api.markets(series_ticker=series_ticker)
+    mkts = []
+    for market in candidates:
+        close_time = market.get("close_time")
+        if not isinstance(close_time, str) or not close_time:
+            raise ValueError(
+                "market {} has no valid close_time".format(
+                    market.get("ticker", "<unknown>")))
+        if _to_unix(close_time) >= start_ts:
+            mkts.append(market)
+    upsert_markets(conn, [dict(m, series_ticker=series_ticker) for m in mkts])
+
     n_tr = n_cd = 0
     complete = 0
     for m in mkts:
         tk = m["ticker"]
         tr = api.trades(ticker=tk, min_ts=start_ts, max_ts=end_ts)
         n_tr += upsert_trades(conn, [dict(t, ticker=tk) for t in tr])
-        cd = api.candlesticks(series_ticker, tk, start_ts, end_ts, 60)
+        cd = api.candlesticks(
+            series_ticker, tk, start_ts, end_ts, 60,
+            historical=bool(m.get("_kxsurv_historical")))
         n_cd += upsert_candles(conn, [dict(c, ticker=tk) for c in cd])
         ok, _ = check_completeness(conn, tk)
         complete += 1 if ok else 0
