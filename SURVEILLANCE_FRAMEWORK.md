@@ -317,11 +317,11 @@ rerun; `out/saved-snapshot.log` retains the compact command/result record.
 | Field | Value |
 |---|---|
 | Run ID | 8 |
-| Source commit | `e0d24a2` |
+| Source commit | `2772000` |
 | Parameters SHA-256 | `b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057` |
 | Input fingerprint | `6bdc06093985193845082f3288f2fcbf62c6c656cb265b5302459f88533d2983` |
-| Code fingerprint | `60702ce0b3239f50667f742822d702550e47a7436e2d04d621c3c6653a556b90` |
-| Finished | 2026-09-11T14:02:33.048821+00:00 |
+| Code fingerprint | `760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e` |
+| Finished | 2026-09-11T15:45:18.415501+00:00 |
 | Execution status | complete, 5/5 controls |
 
 **Superseded run provenance.** The following record predates the C4 monetary-
@@ -390,7 +390,7 @@ declarations, and no ladder settlement contradictions. Fixture tests separately
 exercise each firing condition; the zero is not evidence that broader
 settlement risk is absent.
 
-The corrected challenge rerun is run 4 at source commit `e0d24a2`, with 5/5
+The corrected challenge rerun is run 3 at source commit `2772000`, with 5/5
 controls complete. It produced C1 0, C2 0, C3 82, C4 0, and C5 0; all 82 C3
 rows remain untriaged because this is a development corpus, not a published
 performance result.
@@ -399,8 +399,8 @@ performance result.
 |---|---|
 | Parameters SHA-256 | `b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057` |
 | Input fingerprint | `c997f294d10ce29f513cd1ce5df068fb63699fe1c04bb75c5c5c4eae522a8c68` |
-| Code fingerprint | `60702ce0b3239f50667f742822d702550e47a7436e2d04d621c3c6653a556b90` |
-| Finished | 2026-09-11T14:02:39.134607+00:00 |
+| Code fingerprint | `760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e` |
+| Finished | 2026-09-11T15:48:53.282593+00:00 |
 
 ## 8. Review cadence and known limitations
 

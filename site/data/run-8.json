@@ -1,0 +1,953 @@
+{
+  "alerts": [
+    {
+      "alert_id": 695,
+      "control_id": "C1",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.289702+00:00",
+        "rationale": "No action. The surprise-weighted score of 0.0308 is negligible. Each trade is discounted by the probability its own execution price already implied, so flow arriving after the market had converged is not credited at a stale opening quote. With 5 discrete matched control windows, a top rank is the maximum rank available rather than a calibrated tail probability. The 108 contracts across 6 trades in this window carry no signature distinguishable from ordinary post-convergence flow."
+      },
+      "evidence": {
+        "event": "KXCPI-26JUN",
+        "halt_to_release_minutes": 5.0,
+        "limitation": "cannot distinguish superior public-information processing from misuse of non-public information; candidate rates are descriptive, not calibrated false-positive rates",
+        "null_samples": 5,
+        "p0": 0.015,
+        "scheduled_release_population": 5,
+        "settled": "no",
+        "settled_ladder_population": 9,
+        "surprise_price": "per-trade execution price",
+        "trade_count": 6,
+        "window_volume": 107.98
+      },
+      "percentile": 100.0,
+      "score": 0.030794591591035408,
+      "target": "KXCPI-26JUN-T0.1",
+      "threshold": 95.0,
+      "window_end": "2026-07-14T12:25:00Z",
+      "window_start": "2026-07-14T10:25:00Z"
+    },
+    {
+      "alert_id": 696,
+      "control_id": "C1",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.290557+00:00",
+        "rationale": "No action. The surprise-weighted score of 0.0137 is negligible. Each trade is discounted by the probability its own execution price already implied, so flow arriving after the market had converged is not credited at a stale opening quote. With 9 discrete matched control windows, a top rank is the maximum rank available rather than a calibrated tail probability. The 156 contracts across 8 trades in this window carry no signature distinguishable from ordinary post-convergence flow."
+      },
+      "evidence": {
+        "event": "KXCPIYOY-26JUL",
+        "halt_to_release_minutes": 1.0,
+        "limitation": "cannot distinguish superior public-information processing from misuse of non-public information; candidate rates are descriptive, not calibrated false-positive rates",
+        "null_samples": 9,
+        "p0": 0.995,
+        "scheduled_release_population": 5,
+        "settled": "yes",
+        "settled_ladder_population": 9,
+        "surprise_price": "per-trade execution price",
+        "trade_count": 8,
+        "window_volume": 156.25
+      },
+      "percentile": 100.0,
+      "score": 0.01366400000000001,
+      "target": "KXCPIYOY-26JUL-T3.0",
+      "threshold": 95.0,
+      "window_end": "2026-08-12T12:29:00Z",
+      "window_start": "2026-08-12T10:29:00Z"
+    },
+    {
+      "alert_id": 697,
+      "control_id": "C1",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.290806+00:00",
+        "rationale": "Monitor. The surprise-weighted score of 0.345 is an order of magnitude above the other C1 candidates in this run (0.0137, 0.0308) and ranks highest against its matched control windows, on 212 contracts across 7 trades in the 1 minute(s) between halt and scheduled publication. Recorded for monitoring rather than escalation: With 16 discrete matched control windows, a top rank is the maximum rank available rather than a calibrated tail probability. C1 cannot separate superior processing of public information from misuse of non-public information. Escalation would require account-level data held only by the exchange."
+      },
+      "evidence": {
+        "event": "KXPAYROLLS-26AUG",
+        "halt_to_release_minutes": 1.0,
+        "limitation": "cannot distinguish superior public-information processing from misuse of non-public information; candidate rates are descriptive, not calibrated false-positive rates",
+        "null_samples": 16,
+        "p0": 0.835,
+        "scheduled_release_population": 5,
+        "settled": "yes",
+        "settled_ladder_population": 9,
+        "surprise_price": "per-trade execution price",
+        "trade_count": 7,
+        "window_volume": 212.18
+      },
+      "percentile": 100.0,
+      "score": 0.34504006032613815,
+      "target": "KXPAYROLLS-26AUG-T-25000",
+      "threshold": 95.0,
+      "window_end": "2026-09-04T12:29:00Z",
+      "window_start": "2026-09-04T10:29:00Z"
+    },
+    {
+      "alert_id": 683,
+      "control_id": "C3",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.291141+00:00",
+        "rationale": "No action. Two temporally adjacent hourly periods (1h) carried 412 contracts with zero net open-interest change at the peak, in liquidity tier 3. One participant closing while an unrelated participant opens produces exactly this signature; the flat-open-interest signature appeared in 16.2-26.0% of contiguous volume-bearing hourly observations across two sampled markets. Two periods is the configured minimum persistence, so this is the weakest form the control can report."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 212.0,
+        "peak_delta_oi": 0.0,
+        "periods": 2,
+        "span_hours": 1.0,
+        "total_volume": 412.0
+      },
+      "percentile": 96.86454849498328,
+      "score": 212.0,
+      "target": "KXCPI-26JUL-T0.3",
+      "threshold": 95.0,
+      "window_end": "1784854800",
+      "window_start": "1784851200"
+    },
+    {
+      "alert_id": 684,
+      "control_id": "C3",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.291321+00:00",
+        "rationale": "No action. Two temporally adjacent hourly periods (1h) carried 1,013 contracts with zero net open-interest change at the peak, in liquidity tier 3. One participant closing while an unrelated participant opens produces exactly this signature; the flat-open-interest signature appeared in 16.2-26.0% of contiguous volume-bearing hourly observations across two sampled markets. Two periods is the configured minimum persistence, so this is the weakest form the control can report."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 780.34,
+        "peak_delta_oi": 0.0,
+        "periods": 2,
+        "span_hours": 1.0,
+        "total_volume": 1013.34
+      },
+      "percentile": 98.98272017837235,
+      "score": 780.34,
+      "target": "KXCPI-26JUN-T0.0",
+      "threshold": 95.0,
+      "window_end": "1783875600",
+      "window_start": "1783872000"
+    },
+    {
+      "alert_id": 685,
+      "control_id": "C3",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.291518+00:00",
+        "rationale": "No action. Two temporally adjacent hourly periods (1h) carried 762 contracts with zero net open-interest change at the peak, in liquidity tier 2. One participant closing while an unrelated participant opens produces exactly this signature; the flat-open-interest signature appeared in 16.2-26.0% of contiguous volume-bearing hourly observations across two sampled markets. Two periods is the configured minimum persistence, so this is the weakest form the control can report."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 2,
+        "peak_d": 250.0,
+        "peak_delta_oi": 0.0,
+        "periods": 2,
+        "span_hours": 1.0,
+        "total_volume": 762.0
+      },
+      "percentile": 97.71844660194175,
+      "score": 250.0,
+      "target": "KXCPIYOY-26JUL-T4.0",
+      "threshold": 95.0,
+      "window_end": "1781121600",
+      "window_start": "1781118000"
+    },
+    {
+      "alert_id": 686,
+      "control_id": "C3",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.291721+00:00",
+        "rationale": "Monitor. The divergence held across 3 adjacent hourly periods (2h), beyond the 2-period configured minimum, on 1,028 contracts in liquidity tier 3, with zero net open-interest change at the peak. Recorded for monitoring: position transfer between unrelated participants remains a sufficient and unfalsified explanation on public data, and C3 observes aggregate volume and open interest, not beneficial ownership. Escalation would require account-level data held only by the exchange."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 527.0,
+        "peak_delta_oi": 0.0,
+        "periods": 3,
+        "span_hours": 2.0,
+        "total_volume": 1028.0
+      },
+      "percentile": 98.56465997770346,
+      "score": 527.0,
+      "target": "KXCPIYOY-26JUL-T4.2",
+      "threshold": 95.0,
+      "window_end": "1784617200",
+      "window_start": "1784610000"
+    },
+    {
+      "alert_id": 687,
+      "control_id": "C3",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.292117+00:00",
+        "rationale": "No action. Two temporally adjacent hourly periods (1h) carried 2,169 contracts with zero net open-interest change at the peak, in liquidity tier 3. One participant closing while an unrelated participant opens produces exactly this signature; the flat-open-interest signature appeared in 16.2-26.0% of contiguous volume-bearing hourly observations across two sampled markets. Two periods is the configured minimum persistence, so this is the weakest form the control can report."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 1119.0,
+        "peak_delta_oi": 0.0,
+        "periods": 2,
+        "span_hours": 1.0,
+        "total_volume": 2169.0
+      },
+      "percentile": 99.35897435897436,
+      "score": 1119.0,
+      "target": "KXCPIYOY-26JUN-T3.9",
+      "threshold": 95.0,
+      "window_end": "1782230400",
+      "window_start": "1782226800"
+    },
+    {
+      "alert_id": 688,
+      "control_id": "C3",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.292321+00:00",
+        "rationale": "Monitor. The divergence held across 3 adjacent hourly periods (2h), beyond the 2-period configured minimum, on 1,261 contracts in liquidity tier 3, with zero net open-interest change at the peak. Recorded for monitoring: position transfer between unrelated participants remains a sufficient and unfalsified explanation on public data, and C3 observes aggregate volume and open interest, not beneficial ownership. Escalation would require account-level data held only by the exchange."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 946.96,
+        "peak_delta_oi": 0.0,
+        "periods": 3,
+        "span_hours": 2.0,
+        "total_volume": 1260.66
+      },
+      "percentile": 99.1499442586399,
+      "score": 946.96,
+      "target": "KXFED-26JUL-T3.75",
+      "threshold": 95.0,
+      "window_end": "1785153600",
+      "window_start": "1785146400"
+    },
+    {
+      "alert_id": 689,
+      "control_id": "C3",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.292519+00:00",
+        "rationale": "Monitor. The divergence held across 5 adjacent hourly periods (4h), beyond the 2-period configured minimum, on 11,531 contracts in liquidity tier 3, with zero net open-interest change at the peak. Recorded for monitoring: position transfer between unrelated participants remains a sufficient and unfalsified explanation on public data, and C3 observes aggregate volume and open interest, not beneficial ownership. Escalation would require account-level data held only by the exchange."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 2105.55,
+        "peak_delta_oi": 0.0,
+        "periods": 5,
+        "span_hours": 4.0,
+        "total_volume": 11530.99
+      },
+      "percentile": 99.72129319955407,
+      "score": 2105.55,
+      "target": "KXFED-26JUL-T4.00",
+      "threshold": 95.0,
+      "window_end": "1784674800",
+      "window_start": "1784660400"
+    },
+    {
+      "alert_id": 690,
+      "control_id": "C3",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.292712+00:00",
+        "rationale": "No action. Two temporally adjacent hourly periods (1h) carried 610 contracts with zero net open-interest change at the peak, in liquidity tier 3. One participant closing while an unrelated participant opens produces exactly this signature; the flat-open-interest signature appeared in 16.2-26.0% of contiguous volume-bearing hourly observations across two sampled markets. Two periods is the configured minimum persistence, so this is the weakest form the control can report."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 329.18,
+        "peak_delta_oi": 0.0,
+        "periods": 2,
+        "span_hours": 1.0,
+        "total_volume": 609.73
+      },
+      "percentile": 97.82608695652173,
+      "score": 329.18,
+      "target": "KXFED-26SEP-T4.00",
+      "threshold": 95.0,
+      "window_end": "1788040800",
+      "window_start": "1788037200"
+    },
+    {
+      "alert_id": 691,
+      "control_id": "C3",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.292867+00:00",
+        "rationale": "Monitor. The divergence held across 3 adjacent hourly periods (2h), beyond the 2-period configured minimum, on 800 contracts in liquidity tier 3, with zero net open-interest change at the peak. Recorded for monitoring: position transfer between unrelated participants remains a sufficient and unfalsified explanation on public data, and C3 observes aggregate volume and open interest, not beneficial ownership. Escalation would require account-level data held only by the exchange."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 350.0,
+        "peak_delta_oi": 0.0,
+        "periods": 3,
+        "span_hours": 2.0,
+        "total_volume": 800.0
+      },
+      "percentile": 97.89576365663322,
+      "score": 350.0,
+      "target": "KXPAYROLLS-26AUG-T90000",
+      "threshold": 95.0,
+      "window_end": "1788472800",
+      "window_start": "1788465600"
+    },
+    {
+      "alert_id": 692,
+      "control_id": "C3",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.293059+00:00",
+        "rationale": "No action. Two temporally adjacent hourly periods (1h) carried 762 contracts with zero net open-interest change at the peak, in liquidity tier 3. One participant closing while an unrelated participant opens produces exactly this signature; the flat-open-interest signature appeared in 16.2-26.0% of contiguous volume-bearing hourly observations across two sampled markets. Two periods is the configured minimum persistence, so this is the weakest form the control can report."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 618.32,
+        "peak_delta_oi": 0.0,
+        "periods": 2,
+        "span_hours": 1.0,
+        "total_volume": 761.83
+      },
+      "percentile": 98.7597547380156,
+      "score": 618.32,
+      "target": "KXPAYROLLS-26JUL-T80000",
+      "threshold": 95.0,
+      "window_end": "1786060800",
+      "window_start": "1786057200"
+    },
+    {
+      "alert_id": 693,
+      "control_id": "C3",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.293250+00:00",
+        "rationale": "Monitor. The divergence held across 3 adjacent hourly periods (2h), beyond the 2-period configured minimum, on 708 contracts in liquidity tier 3, with zero net open-interest change at the peak. Recorded for monitoring: position transfer between unrelated participants remains a sufficient and unfalsified explanation on public data, and C3 observes aggregate volume and open interest, not beneficial ownership. Escalation would require account-level data held only by the exchange."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 302.18,
+        "peak_delta_oi": 0.0,
+        "periods": 3,
+        "span_hours": 2.0,
+        "total_volume": 708.24
+      },
+      "percentile": 97.67279821627648,
+      "score": 302.18,
+      "target": "KXU3-26AUG-T4.2",
+      "threshold": 95.0,
+      "window_end": "1788040800",
+      "window_start": "1788033600"
+    },
+    {
+      "alert_id": 694,
+      "control_id": "C3",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.293445+00:00",
+        "rationale": "No action. Two temporally adjacent hourly periods (1h) carried 2,936 contracts with zero net open-interest change at the peak, in liquidity tier 3. One participant closing while an unrelated participant opens produces exactly this signature; the flat-open-interest signature appeared in 16.2-26.0% of contiguous volume-bearing hourly observations across two sampled markets. Two periods is the configured minimum persistence, so this is the weakest form the control can report."
+      },
+      "evidence": {
+        "base_rate_note": "flat-OI signature frequency was 16.2-26.0% in two cited market samples; public data does not label it benign; this is a screening proxy, not evidence",
+        "liquidity_tier": 3,
+        "peak_d": 1254.84,
+        "peak_delta_oi": 0.0,
+        "periods": 2,
+        "span_hours": 1.0,
+        "total_volume": 2936.16
+      },
+      "percentile": 99.51226309921962,
+      "score": 1254.84,
+      "target": "KXU3-26JUL-T4.0",
+      "threshold": 95.0,
+      "window_end": "1786050000",
+      "window_start": "1786046400"
+    },
+    {
+      "alert_id": 669,
+      "control_id": "C4",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.293641+00:00",
+        "rationale": "No action. The 0.225 inversion between strikes 0.3 and 0.4 exceeds the combined half-spread of 0.205 by only 1.1x. An inversion that small relative to the width of the quotes themselves is not separable from ordinary wide two-sided quoting, and the shared hourly candle endpoint does not establish that the two quotes were simultaneously live."
+      },
+      "evidence": {
+        "combined_half_spread": 0.205,
+        "lower_mid": 0.24,
+        "lower_strike": 0.3,
+        "magnitude": 0.225,
+        "peak_snapshot_ts": 1783904400,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 7,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.465,
+        "upper_strike": 0.4
+      },
+      "percentile": null,
+      "score": 0.225,
+      "target": "KXCPI-26JUL:0.3>0.4",
+      "threshold": 0.01,
+      "window_end": "1783904400",
+      "window_start": "1783900800"
+    },
+    {
+      "alert_id": 670,
+      "control_id": "C4",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.293839+00:00",
+        "rationale": "No action. The 0.22 inversion between strikes 0.3 and 0.4 exceeds the combined half-spread of 0.21 by only 1.05x. An inversion that small relative to the width of the quotes themselves is not separable from ordinary wide two-sided quoting, and the shared hourly candle endpoint does not establish that the two quotes were simultaneously live."
+      },
+      "evidence": {
+        "combined_half_spread": 0.21,
+        "lower_mid": 0.235,
+        "lower_strike": 0.3,
+        "magnitude": 0.22,
+        "peak_snapshot_ts": 1783918800,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 10,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.455,
+        "upper_strike": 0.4
+      },
+      "percentile": null,
+      "score": 0.22,
+      "target": "KXCPI-26JUL:0.3>0.4",
+      "threshold": 0.01,
+      "window_end": "1783922400",
+      "window_start": "1783918800"
+    },
+    {
+      "alert_id": 671,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.294032+00:00",
+        "rationale": "Monitor. The 0.065 inversion between strikes 3 and 3.1 is 2.6x the combined half-spread of 0.025, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 21 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.025,
+        "lower_mid": 0.865,
+        "lower_strike": 3.0,
+        "magnitude": 0.065,
+        "peak_snapshot_ts": 1781150400,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.93,
+        "upper_strike": 3.1
+      },
+      "percentile": null,
+      "score": 0.065,
+      "target": "KXCPIYOY-26NOV:3.0>3.1",
+      "threshold": 0.01,
+      "window_end": "1781150400",
+      "window_start": "1781146800"
+    },
+    {
+      "alert_id": 672,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.294228+00:00",
+        "rationale": "Monitor. The 0.03 inversion between strikes 3.2 and 3.3 is 3x the combined half-spread of 0.01, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 21 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.01,
+        "lower_mid": 0.875,
+        "lower_strike": 3.2,
+        "magnitude": 0.03,
+        "peak_snapshot_ts": 1781146800,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.905,
+        "upper_strike": 3.3
+      },
+      "percentile": null,
+      "score": 0.03,
+      "target": "KXCPIYOY-26NOV:3.2>3.3",
+      "threshold": 0.01,
+      "window_end": "1781150400",
+      "window_start": "1781146800"
+    },
+    {
+      "alert_id": 673,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.294383+00:00",
+        "rationale": "Monitor. The 0.02 inversion between strikes 3.5 and 3.6 is 2x the combined half-spread of 0.01, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 21 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.01,
+        "lower_mid": 0.855,
+        "lower_strike": 3.5,
+        "magnitude": 0.02,
+        "peak_snapshot_ts": 1781146800,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.875,
+        "upper_strike": 3.6
+      },
+      "percentile": null,
+      "score": 0.02,
+      "target": "KXCPIYOY-26NOV:3.5>3.6",
+      "threshold": 0.01,
+      "window_end": "1781150400",
+      "window_start": "1781146800"
+    },
+    {
+      "alert_id": 674,
+      "control_id": "C4",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.294585+00:00",
+        "rationale": "No action. The 0.065 inversion between strikes 3.7 and 3.8 exceeds the combined half-spread of 0.055 by only 1.18x. An inversion that small relative to the width of the quotes themselves is not separable from ordinary wide two-sided quoting, and the shared hourly candle endpoint does not establish that the two quotes were simultaneously live."
+      },
+      "evidence": {
+        "combined_half_spread": 0.055,
+        "lower_mid": 0.795,
+        "lower_strike": 3.7,
+        "magnitude": 0.065,
+        "peak_snapshot_ts": 1781150400,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.86,
+        "upper_strike": 3.8
+      },
+      "percentile": null,
+      "score": 0.065,
+      "target": "KXCPIYOY-26NOV:3.7>3.8",
+      "threshold": 0.01,
+      "window_end": "1781154000",
+      "window_start": "1781150400"
+    },
+    {
+      "alert_id": 675,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.294822+00:00",
+        "rationale": "Monitor. The 0.095 inversion between strikes 4.2 and 4.3 is 3.8x the combined half-spread of 0.025, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 21 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.025,
+        "lower_mid": 0.705,
+        "lower_strike": 4.2,
+        "magnitude": 0.095,
+        "peak_snapshot_ts": 1781150400,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.8,
+        "upper_strike": 4.3
+      },
+      "percentile": null,
+      "score": 0.095,
+      "target": "KXCPIYOY-26NOV:4.2>4.3",
+      "threshold": 0.01,
+      "window_end": "1781154000",
+      "window_start": "1781150400"
+    },
+    {
+      "alert_id": 676,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.295127+00:00",
+        "rationale": "Monitor. The 0.05 inversion between strikes 4.5 and 4.6 is 5x the combined half-spread of 0.01, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 21 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.01,
+        "lower_mid": 0.575,
+        "lower_strike": 4.5,
+        "magnitude": 0.05,
+        "peak_snapshot_ts": 1781157600,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.625,
+        "upper_strike": 4.6
+      },
+      "percentile": null,
+      "score": 0.05,
+      "target": "KXCPIYOY-26NOV:4.5>4.6",
+      "threshold": 0.01,
+      "window_end": "1781161200",
+      "window_start": "1781157600"
+    },
+    {
+      "alert_id": 677,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.295325+00:00",
+        "rationale": "Monitor. The 0.02 inversion between strikes 4.5 and 4.6 is 2x the combined half-spread of 0.01, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 21 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.01,
+        "lower_mid": 0.525,
+        "lower_strike": 4.5,
+        "magnitude": 0.02,
+        "peak_snapshot_ts": 1781128800,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.545,
+        "upper_strike": 4.6
+      },
+      "percentile": null,
+      "score": 0.02,
+      "target": "KXCPIYOY-26SEP:4.5>4.6",
+      "threshold": 0.01,
+      "window_end": "1781132400",
+      "window_start": "1781128800"
+    },
+    {
+      "alert_id": 678,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.295539+00:00",
+        "rationale": "Monitor. The 0.02 inversion between strikes 3.9 and 4 is 2x the combined half-spread of 0.01, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 21 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.01,
+        "lower_mid": 0.855,
+        "lower_strike": 3.9,
+        "magnitude": 0.02,
+        "peak_snapshot_ts": 1781157600,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.875,
+        "upper_strike": 4.0
+      },
+      "percentile": null,
+      "score": 0.02,
+      "target": "KXCPIYOY-26SEP:3.9>4.0",
+      "threshold": 0.01,
+      "window_end": "1781161200",
+      "window_start": "1781157600"
+    },
+    {
+      "alert_id": 679,
+      "control_id": "C4",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.295705+00:00",
+        "rationale": "No action. The 0.09 inversion between strikes 4.9 and 5 exceeds the combined half-spread of 0.07 by only 1.29x. An inversion that small relative to the width of the quotes themselves is not separable from ordinary wide two-sided quoting, and the shared hourly candle endpoint does not establish that the two quotes were simultaneously live."
+      },
+      "evidence": {
+        "combined_half_spread": 0.07,
+        "lower_mid": 0.095,
+        "lower_strike": 4.9,
+        "magnitude": 0.09,
+        "peak_snapshot_ts": 1781161200,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 21,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.185,
+        "upper_strike": 5.0
+      },
+      "percentile": null,
+      "score": 0.09,
+      "target": "KXCPIYOY-26SEP:4.9>5.0",
+      "threshold": 0.01,
+      "window_end": "1781164800",
+      "window_start": "1781161200"
+    },
+    {
+      "alert_id": 680,
+      "control_id": "C4",
+      "disposition": {
+        "action": "no_action",
+        "created_at": "2026-09-11T15:45:29.295901+00:00",
+        "rationale": "No action. The 0.225 inversion between strikes 3.75 and 4 exceeds the combined half-spread of 0.195 by only 1.15x. An inversion that small relative to the width of the quotes themselves is not separable from ordinary wide two-sided quoting, and the shared hourly candle endpoint does not establish that the two quotes were simultaneously live."
+      },
+      "evidence": {
+        "combined_half_spread": 0.195,
+        "lower_mid": 0.365,
+        "lower_strike": 3.75,
+        "magnitude": 0.225,
+        "peak_snapshot_ts": 1785416400,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 13,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.59,
+        "upper_strike": 4.0
+      },
+      "percentile": null,
+      "score": 0.225,
+      "target": "KXFED-27APR:3.75>4.0",
+      "threshold": 0.01,
+      "window_end": "1785420000",
+      "window_start": "1785416400"
+    },
+    {
+      "alert_id": 681,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.296100+00:00",
+        "rationale": "Monitor. The 0.04 inversion between strikes 50000 and 60000 is 4x the combined half-spread of 0.01, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 13 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.01,
+        "lower_mid": 0.575,
+        "lower_strike": 50000.0,
+        "magnitude": 0.04,
+        "peak_snapshot_ts": 1786057200,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 13,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.615,
+        "upper_strike": 60000.0
+      },
+      "percentile": null,
+      "score": 0.04,
+      "target": "KXPAYROLLS-26JUL:50000.0>60000.0",
+      "threshold": 0.01,
+      "window_end": "1786060800",
+      "window_start": "1786057200"
+    },
+    {
+      "alert_id": 682,
+      "control_id": "C4",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.296295+00:00",
+        "rationale": "Monitor. The 0.02 inversion between strikes 3.9 and 4 is 2x the combined half-spread of 0.01, outside the width attributable to two-sided quoting noise, and it persisted across 2 consecutive adjacent hourly snapshots with 2 strikes quoted in the period. Recorded for monitoring rather than escalation: shared hourly candle endpoints do not establish when each market's quote last changed within the period, so this is period-aligned price incoherence, not a demonstrated simultaneous executable inconsistency, and it says nothing about the conduct of any participant."
+      },
+      "evidence": {
+        "combined_half_spread": 0.01,
+        "lower_mid": 0.885,
+        "lower_strike": 3.9,
+        "magnitude": 0.02,
+        "peak_snapshot_ts": 1785744000,
+        "period_seconds": 3600,
+        "snapshots_persisted": 2,
+        "strikes_in_snapshot": 2,
+        "timing_limitation": "Shared hourly candle endpoints do not establish when each market's quote last changed within the period.",
+        "upper_mid": 0.905,
+        "upper_strike": 4.0
+      },
+      "percentile": null,
+      "score": 0.02,
+      "target": "KXU3-26AUG:3.9>4.0",
+      "threshold": 0.01,
+      "window_end": "1785747600",
+      "window_start": "1785744000"
+    },
+    {
+      "alert_id": 698,
+      "control_id": "C5",
+      "disposition": {
+        "action": "monitor",
+        "created_at": "2026-09-11T15:45:29.296496+00:00",
+        "rationale": "Monitor. BLS, Bureau of Labor Statistics are declared as distinct settlement sources while sharing the single declared domain www.bls.gov, so any concentration measured from the raw settlement-source field understates correlated exposure. Grouping the candidate names gives a set-union coverage of 310 of the corpus's markets (76%). Recorded for monitoring: this is an operational settlement-metadata and concentration-dependency observation, not a finding about trading conduct. The shared domain corroborates but does not independently verify that the two declared names denote one provider; no corroborating reference-data feed is ingested."
+      },
+      "evidence": {
+        "consequence": "raw-name concentration may understate correlated exposure if provider identity is confirmed",
+        "declared_names": [
+          "BLS",
+          "Bureau of Labor Statistics"
+        ],
+        "issue": "candidate duplicate settlement-source naming",
+        "markets_affected": 310,
+        "share_of_corpus": 0.7598,
+        "source_domains": [
+          "www.bls.gov"
+        ],
+        "track": "operational settlement risk, not participant conduct"
+      },
+      "percentile": null,
+      "score": 310.0,
+      "target": "source:Bureau of Labor Statistics",
+      "threshold": null,
+      "window_end": null,
+      "window_start": null
+    }
+  ],
+  "controls": {
+    "C1": {
+      "core_principle": "CP 12 \u2014 Protection of Markets and Market Participants",
+      "name": "Pre-release informed flow",
+      "purpose": "Pre-release information screen"
+    },
+    "C2": {
+      "core_principle": "CP 4 \u2014 Prevention of Market Disruption",
+      "name": "Pre-halt price pressure",
+      "purpose": "Directionally aligned, thin-market pressure screen"
+    },
+    "C3": {
+      "core_principle": "CP 12 \u2014 Protection of Markets and Market Participants",
+      "name": "Volume / open-interest divergence",
+      "purpose": "Wash-trade screening proxy"
+    },
+    "C4": {
+      "core_principle": "CP 4 \u2014 Prevention of Market Disruption",
+      "name": "Ladder monotonicity coherence",
+      "purpose": "Price-quality screen across related contracts"
+    },
+    "C5": {
+      "core_principle": "CP 4 \u2014 Prevention of Market Disruption",
+      "name": "Settlement-source integrity",
+      "purpose": "Settlement metadata and resolution-consistency screen"
+    }
+  },
+  "corpus": {
+    "candles": 248912,
+    "events": 28,
+    "markets": 408,
+    "series": [
+      "KXCPI",
+      "KXCPIYOY",
+      "KXFED",
+      "KXPAYROLLS",
+      "KXU3"
+    ],
+    "trades": 100494
+  },
+  "coverage": {
+    "C1": {
+      "considered": 408,
+      "gate_blocked": 0,
+      "low_volume": 61,
+      "no_result": 276,
+      "null_too_small": 2,
+      "release_time_unknown": 0,
+      "scored": 69
+    },
+    "C3": {
+      "percentile_qualified": 480,
+      "scoreable": 9793
+    }
+  },
+  "disclaimer": "A methodology demonstration on public Kalshi market data. Not an audit, an allegation of misconduct, or a claim to have detected abuse. The public tape carries no counterparty identity, so the program cannot identify accounts, establish beneficial ownership, demonstrate coordination, or establish intent. Every participant-facing output is an alert warranting investigation, never a finding.",
+  "executions": [
+    {
+      "alert_count": 3,
+      "control_id": "C1",
+      "finished_at": "2026-09-11T15:45:17.313732+00:00",
+      "started_at": "2026-09-11T15:45:17.284432+00:00",
+      "status": "complete"
+    },
+    {
+      "alert_count": 0,
+      "control_id": "C2",
+      "finished_at": "2026-09-11T15:45:17.317888+00:00",
+      "started_at": "2026-09-11T15:45:17.313869+00:00",
+      "status": "complete"
+    },
+    {
+      "alert_count": 12,
+      "control_id": "C3",
+      "finished_at": "2026-09-11T15:45:17.284249+00:00",
+      "started_at": "2026-09-11T15:45:15.637941+00:00",
+      "status": "complete"
+    },
+    {
+      "alert_count": 14,
+      "control_id": "C4",
+      "finished_at": "2026-09-11T15:45:15.637709+00:00",
+      "started_at": "2026-09-11T15:45:15.009049+00:00",
+      "status": "complete"
+    },
+    {
+      "alert_count": 1,
+      "control_id": "C5",
+      "finished_at": "2026-09-11T15:45:17.318940+00:00",
+      "started_at": "2026-09-11T15:45:17.317985+00:00",
+      "status": "complete"
+    }
+  ],
+  "export_schema": 1,
+  "funnel": {
+    "by_control": {
+      "C1": {
+        "escalated": 0,
+        "generated": 3,
+        "monitor": 1,
+        "no_action": 2,
+        "triaged": 3
+      },
+      "C2": {
+        "escalated": 0,
+        "generated": 0,
+        "monitor": 0,
+        "no_action": 0,
+        "triaged": 0
+      },
+      "C3": {
+        "escalated": 0,
+        "generated": 12,
+        "monitor": 5,
+        "no_action": 7,
+        "triaged": 12
+      },
+      "C4": {
+        "escalated": 0,
+        "generated": 14,
+        "monitor": 9,
+        "no_action": 5,
+        "triaged": 14
+      },
+      "C5": {
+        "escalated": 0,
+        "generated": 1,
+        "monitor": 1,
+        "no_action": 0,
+        "triaged": 1
+      }
+    },
+    "escalated": 0,
+    "generated": 30,
+    "monitor": 16,
+    "no_action": 14,
+    "triaged": 30,
+    "untriaged": 0
+  },
+  "generated_at": "2026-09-11T15:49:33.713926+00:00",
+  "run": {
+    "code_drift": false,
+    "code_hash": "760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e",
+    "code_hash_current": "760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e",
+    "controls_complete": 5,
+    "controls_expected": 5,
+    "finished_at": "2026-09-11T15:45:18.415501+00:00",
+    "input_hash": "6bdc06093985193845082f3288f2fcbf62c6c656cb265b5302459f88533d2983",
+    "params_hash": "b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057",
+    "params_version": "1.1.0",
+    "run_id": 8,
+    "source_commit": "2772000",
+    "source_dirty": true,
+    "started_at": "2026-09-11T15:45:15.008624+00:00",
+    "status": "complete"
+  }
+}

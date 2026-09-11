@@ -97,12 +97,15 @@ dispositions are scoped to an execution record.
 ## v1.1 re-analysis of the saved snapshot
 
 Applying all current corrective boundaries to that same saved database produces
-**30 candidates**, all reviewed in run 8: 14 no-action, 16 monitor, and 0
-escalated. Run 8 reproduced the same alert fields as run 7 after the acquisition-
-tier hardening; each current row received a new run-scoped disposition after
-that equality check. The 28 C4 rows removed by the monetary-boundary correction
-had all previously been disposed `no_action`; no C4 monitor decision was
-silently discarded.
+**30 candidates**, all reviewed: 14 no-action, 16 monitor, and 0 escalated. Each
+row carries a written rationale scoped to this run; no disposition is inherited
+from an earlier run by database linkage. The 28 C4 rows removed by the
+monetary-boundary correction had all previously been disposed `no_action`, so no
+C4 monitor decision was silently discarded.
+
+Every figure in the table below is rendered from the same exported record the
+[results viewer](https://marc-melone.github.io/kxsurv/) serves, so the published
+numbers and the published artifact cannot disagree.
 
 | Control | Generated | No action | Monitor | Escalated |
 |---|---:|---:|---:|---:|
@@ -127,9 +130,12 @@ prevents a later re-ingest from silently replacing earlier alert evidence. It
 does **not** preserve a full source-data or source code snapshot; a published
 result should also name its source commit or release tag.
 
-The current saved-snapshot record is run 8 at source commit `e0d24a2` (5/5
-controls complete). Its full fingerprints and timestamps are retained in
-`out/saved-snapshot.log`; the identified database remains gitignored.
+The current saved-snapshot record is run 8 at source commit `2772000` (5/5 controls
+complete), code fingerprint `760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e`. Its
+full fingerprints and timestamps are retained in `out/saved-snapshot.log`, which
+is generated from the run record rather than written by hand, and the complete
+run is published at `site/data/run-8.json`. The identified database remains
+gitignored.
 
 ## What the saved snapshot shows
 

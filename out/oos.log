@@ -1,24 +1,34 @@
-# Development challenge run — corrected controls
+# Development challenge run - corrected controls
 
 Purpose: remediation/challenge corpus, not independent out-of-sample validation
 Command: PYTHONPATH=src .venv/bin/python -m kxsurv.cli --skip-ingest --db out/oos.db --series KXGDP KXHIGHNY KXFEDDECISION
-Source commit: e0d24a2
-Run ID: 4
+Source commit: 2772000
+Run ID: 3
 Parameter version: 1.1.0
 Parameters SHA-256: b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057
 Input fingerprint: c997f294d10ce29f513cd1ce5df068fb63699fe1c04bb75c5c5c4eae522a8c68
-Code fingerprint: 60702ce0b3239f50667f742822d702550e47a7436e2d04d621c3c6653a556b90
-Started: 2026-09-11T14:02:32.210847+00:00
-Finished: 2026-09-11T14:02:39.134607+00:00
+Code fingerprint: 760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e
+Started: 2026-09-11T15:48:46.730677+00:00
+Finished: 2026-09-11T15:48:53.282593+00:00
 Status: complete (5/5 controls)
 
 Control results:
-- C1: 0 (396 considered markets; all 396 excluded because no source-coded publication time)
+- C1: 0 (0 of 396 markets scored)
 - C2: 0
 - C3: 82 (16,984 scoreable observations; 846 percentile-qualified before persistence)
 - C4: 0
 - C5: 0
 
-Triage status: 82 generated, 0 triaged, 82 untriaged. This corpus exposed defects
-during development, so its outputs are not presented as prospective performance.
-The database itself is gitignored; this log identifies but does not reproduce it.
+Triage funnel:
+- Generated: 82
+- Triaged: 0
+- No action: 0
+- Monitor: 0
+- Escalated: 0
+- Untriaged: 82
+
+This corpus exposed defects during development, so its outputs are not
+presented as prospective performance. C1 scored no market here: all 396
+considered markets lack a source-coded publication time and are out of
+scope. The database is gitignored; this log identifies but does not
+reproduce it.

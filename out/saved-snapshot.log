@@ -1,15 +1,15 @@
 # Saved-snapshot corrective run
 
 Purpose: regression re-analysis of retained 2026-09-07 inputs
-Command: PYTHONPATH=src .venv/bin/python -m kxsurv.cli --skip-ingest --db out/kxsurv.db
-Source commit: e0d24a2
+Command: PYTHONPATH=src .venv/bin/python -m kxsurv.cli --skip-ingest
+Source commit: 2772000
 Run ID: 8
 Parameter version: 1.1.0
 Parameters SHA-256: b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057
 Input fingerprint: 6bdc06093985193845082f3288f2fcbf62c6c656cb265b5302459f88533d2983
-Code fingerprint: 60702ce0b3239f50667f742822d702550e47a7436e2d04d621c3c6653a556b90
-Started: 2026-09-11T14:02:29.564629+00:00
-Finished: 2026-09-11T14:02:33.048821+00:00
+Code fingerprint: 760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e
+Started: 2026-09-11T15:45:15.008624+00:00
+Finished: 2026-09-11T15:45:18.415501+00:00
 Status: complete (5/5 controls)
 
 Control results:
@@ -27,11 +27,7 @@ Triage funnel:
 - Escalated: 0
 - Untriaged: 0
 
-Run 8's alert identity, score, threshold, percentile, window, and evidence
-fields matched run 7 exactly after acquisition-tier hardening. Each run-8 row
-then received a new reviewed disposition; no disposition row was inherited by
-database linkage.
-
-This is a corrective regression on data used during development, not prospective
-validation. The database itself is gitignored; this log identifies but does not
-reproduce it.
+This log is generated from the run record itself, not written by hand. The
+same run is published in full at site/data/run-8.json. This is a corrective
+regression on data used during development, not prospective validation. The
+database is gitignored; this log identifies but does not reproduce it.
