@@ -933,7 +933,7 @@
     "triaged": 30,
     "untriaged": 0
   },
-  "generated_at": "2026-09-11T15:49:33.713926+00:00",
+  "generated_at": "2026-09-11T15:51:55.117438+00:00",
   "run": {
     "code_drift": false,
     "code_hash": "760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e",
@@ -945,8 +945,8 @@
     "params_hash": "b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057",
     "params_version": "1.1.0",
     "run_id": 8,
-    "source_commit": "2772000",
-    "source_dirty": true,
+    "source_commit": "31f6569",
+    "source_dirty": false,
     "started_at": "2026-09-11T15:45:15.008624+00:00",
     "status": "complete"
   }
