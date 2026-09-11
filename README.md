@@ -206,6 +206,13 @@ PYTHONPATH=src .venv/bin/python -m kxsurv.cli --register-params
 PYTHONPATH=src .venv/bin/python -m kxsurv.cli
 ```
 
+To render the published results locally, serve the `site/` directory and open
+the address it prints:
+
+```bash
+python3 -m http.server --directory site
+```
+
 `--skip-ingest` evaluates the currently stored data and creates a new run
 record only when the snapshot is marked ready. A full ingest claims a refresh
 generation, clears the prior detector-input tables, retains markets whose close
@@ -223,7 +230,6 @@ a fresh clone.
 | `SURVEILLANCE_FRAMEWORK.md` | Current v1.1 methodology, governance, lineage, and limitations |
 | `SURVEILLANCE_PLAN.md` | v1.1 parameter-registration record and threshold rationale |
 | `cases/` | Selected analyst records from the saved-snapshot corrective run |
-| `docs/archive/` | Archived v1.0 design and implementation material, not operating documentation |
 | `site/` | Static results viewer and the published run artifact it renders |
 
 ## Limitations
