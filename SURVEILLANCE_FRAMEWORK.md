@@ -317,7 +317,7 @@ rerun; `out/saved-snapshot.log` retains the compact command/result record.
 | Field | Value |
 |---|---|
 | Run ID | 8 |
-| Source commit | `2772000` |
+| Source commit | `6b11825` |
 | Parameters SHA-256 | `b7ebfd8a51a871df8d9cd240afa24a956a9d077636e9bc6d28bfd571b00bb057` |
 | Input fingerprint | `6bdc06093985193845082f3288f2fcbf62c6c656cb265b5302459f88533d2983` |
 | Code fingerprint | `760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e` |
@@ -390,7 +390,7 @@ declarations, and no ladder settlement contradictions. Fixture tests separately
 exercise each firing condition; the zero is not evidence that broader
 settlement risk is absent.
 
-The corrected challenge rerun is run 3 at source commit `2772000`, with 5/5
+The corrected challenge rerun is run 3 at source commit `6b11825`, with 5/5
 controls complete. It produced C1 0, C2 0, C3 82, C4 0, and C5 0; all 82 C3
 rows remain untriaged because this is a development corpus, not a published
 performance result.

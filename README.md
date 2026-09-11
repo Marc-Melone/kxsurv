@@ -130,7 +130,7 @@ prevents a later re-ingest from silently replacing earlier alert evidence. It
 does **not** preserve a full source-data or source code snapshot; a published
 result should also name its source commit or release tag.
 
-The current saved-snapshot record is run 8 at source commit `2772000` (5/5 controls
+The current saved-snapshot record is run 8 at source commit `6b11825` (5/5 controls
 complete), code fingerprint `760839ab76ada33a0db862be242dbf69324dc9429e2d82235142cf81e936c82e`. Its
 full fingerprints and timestamps are retained in `out/saved-snapshot.log`, which
 is generated from the run record rather than written by hand, and the complete
