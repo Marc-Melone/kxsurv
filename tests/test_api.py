@@ -102,3 +102,77 @@ def test_trades_merge_live_and_historical_tiers(monkeypatch):
     assert [path for path, _ in calls] == ["/markets/trades", "/historical/trades"]
     assert all(params["ticker"] == "K1" and params["min_ts"] == 10
                and params["max_ts"] == 20 for _, params in calls)
+
+
+def test_markets_merge_live_and_historical_tiers(monkeypatch):
+    calls = []
+
+    def fake_paginate(self, path, key, params, max_pages=200):
+        calls.append((path, dict(params)))
+        if path == "/historical/markets":
+            return [{"ticker": "OLD", "event_ticker": "E1", "result": "yes"}]
+        return [{"ticker": "NEW", "event_ticker": "E2", "result": ""}]
+
+    monkeypatch.setattr(KalshiPublic, "_paginate", fake_paginate)
+    out = KalshiPublic().markets(series_ticker="KXQ")
+    assert [row["ticker"] for row in out] == ["NEW", "OLD"]
+    assert {row["ticker"]: row["_kxsurv_historical"] for row in out} == {
+        "NEW": False, "OLD": True,
+    }
+    assert [path for path, _ in calls] == ["/markets", "/historical/markets"]
+    assert all(params["series_ticker"] == "KXQ" for _, params in calls)
+
+
+def test_market_tier_disagreement_fails_closed(monkeypatch):
+    def fake_paginate(self, path, key, params, max_pages=200):
+        result = "no" if path == "/historical/markets" else "yes"
+        return [{"ticker": "K1", "event_ticker": "E", "result": result}]
+
+    monkeypatch.setattr(KalshiPublic, "_paginate", fake_paginate)
+    with pytest.raises(RuntimeError, match="disagree for market K1"):
+        KalshiPublic().markets(series_ticker="KXQ")
+
+
+def test_open_market_query_does_not_scan_historical_tier(monkeypatch):
+    calls = []
+
+    def fake_paginate(self, path, key, params, max_pages=200):
+        calls.append(path)
+        return []
+
+    monkeypatch.setattr(KalshiPublic, "_paginate", fake_paginate)
+    assert KalshiPublic().markets(series_ticker="KXQ", status="open") == []
+    assert calls == ["/markets"]
+
+
+def test_historical_candles_are_routed_and_normalized(monkeypatch):
+    calls = []
+
+    def fake_get(self, path, params=None):
+        calls.append((path, params))
+        return {"candlesticks": [{
+            "end_period_ts": 123,
+            "volume": "10.00",
+            "open_interest": "20.00",
+            "yes_bid": {"close": "0.40"},
+            "yes_ask": {"close": "0.44"},
+        }]}
+
+    monkeypatch.setattr(KalshiPublic, "_get", fake_get)
+    out = KalshiPublic().candlesticks(
+        "KXQ", "KXQ-E-T1", 100, 200, historical=True)
+    assert calls[0][0] == "/historical/markets/KXQ-E-T1/candlesticks"
+    assert out[0]["volume_fp"] == "10.00"
+    assert out[0]["open_interest_fp"] == "20.00"
+    assert out[0]["yes_bid"]["close_dollars"] == "0.40"
+    assert out[0]["yes_ask"]["close_dollars"] == "0.44"
+
+
+def test_candle_missing_required_volume_fails_closed(monkeypatch):
+    monkeypatch.setattr(
+        KalshiPublic, "_get",
+        lambda *_args, **_kwargs: {
+            "candlesticks": [{"end_period_ts": 123, "open_interest_fp": "1"}]},
+    )
+    with pytest.raises(RuntimeError, match="volume_fp"):
+        KalshiPublic().candlesticks("KXQ", "T", 100, 200)

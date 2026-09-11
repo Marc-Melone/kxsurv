@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from kxsurv.db import upsert_trades, upsert_candles
-from kxsurv.ingest import check_completeness
+from kxsurv.ingest import check_completeness, ingest_series
 from tests.fixtures import trade, candle
 
 T0 = "2026-08-12T09:00:00Z"
@@ -72,3 +72,36 @@ def test_market_with_candles_but_no_tape_is_flagged_not_failed(conn):
     assert ok is True
     row = conn.execute("SELECT tape_volume, complete FROM ingest_log").fetchone()
     assert row[0] == 0.0 and row[1] == 1
+
+
+def test_ingest_bounds_markets_and_routes_archived_candles(conn, monkeypatch):
+    monkeypatch.setattr("kxsurv.ingest.time.time", lambda: TS0)
+    calls = []
+
+    def iso(ts):
+        return datetime.fromtimestamp(ts, timezone.utc).isoformat().replace("+00:00", "Z")
+
+    class Api:
+        def markets(self, **_filters):
+            return [
+                {"ticker": "OLD", "event_ticker": "OLD-E",
+                 "close_time": iso(TS0 - 91 * 86400),
+                 "floor_strike": 1.0, "strike_type": "greater"},
+                {"ticker": "NEW", "event_ticker": "NEW-E",
+                 "close_time": iso(TS0 + 3600),
+                 "floor_strike": 1.0, "strike_type": "greater",
+                 "_kxsurv_historical": True},
+            ]
+
+        def trades(self, **_kwargs):
+            return []
+
+        def candlesticks(self, series, ticker, start, end, period,
+                         historical=False):
+            calls.append((series, ticker, historical))
+            return [candle(ticker, TS0, 1, 1)]
+
+    result = ingest_series(conn, Api(), "KXQ", days=90)
+    assert result["markets"] == 1
+    assert conn.execute("SELECT ticker FROM markets").fetchall() == [("NEW",)]
+    assert calls == [("KXQ", "NEW", True)]

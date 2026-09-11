@@ -1,8 +1,7 @@
-"""Triage. Real surveillance is overwhelmingly false positives.
+"""Run-scoped analyst dispositions for surveillance candidates.
 
-A program reporting "37 alerts, 34 closed as benign, here is the reasoning for
-each" demonstrates better judgement than one claiming detections. Mostly
-no-action dispositions is the expected and acceptable result.
+Transparent written rationales show why each alert was closed, retained for
+monitoring, or escalated without turning a screening output into a finding.
 """
 from __future__ import annotations
 

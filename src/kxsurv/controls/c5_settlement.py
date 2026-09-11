@@ -145,10 +145,22 @@ def _source_domains(conn, names: list[str]) -> list[str]:
     if not names:
         return []
     rows = conn.execute(
-        "SELECT source_url FROM settlement_sources WHERE source_name IN ({})".format(
+        "SELECT source_name, source_url FROM settlement_sources"
+        " WHERE source_name IN ({})".format(
             ",".join("?" * len(names))), names).fetchall()
-    return sorted({parsed.hostname.lower() for (url,) in rows if url
-                   for parsed in [urlparse(str(url))] if parsed.hostname})
+    # Every candidate name must be independently corroborated by exactly one
+    # valid declared hostname, and all names must resolve to the same hostname.
+    # Looking only at the union of non-null URLs would let one named source with
+    # a missing URL borrow the other source's domain as false corroboration.
+    by_name = {name: set() for name in names}
+    for name, url in rows:
+        parsed = urlparse(str(url)) if url else None
+        if parsed is not None and parsed.hostname:
+            by_name[name].add(parsed.hostname.lower())
+    if any(len(domains) != 1 for domains in by_name.values()):
+        return []
+    shared = set().union(*by_name.values())
+    return sorted(shared) if len(shared) == 1 else []
 
 
 def run(conn, params: dict) -> list[Alert]:

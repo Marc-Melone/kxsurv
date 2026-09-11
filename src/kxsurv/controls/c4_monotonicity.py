@@ -1,9 +1,8 @@
 """C4 - ladder monotonicity coherence. CFTC DCM Core Principle 4.
 
 Kalshi's economic series are `strike_type == "greater"` threshold ladders:
-nested cumulative contracts, NOT mutually exclusive partitions. Verified
-2026-09-07: KXCPI-26SEP mids sum to 7.54, so a sum-to-$1 constraint would fire
-on every healthy market.
+nested cumulative contracts, NOT mutually exclusive partitions. Their prices
+therefore need not sum to $1; applying a partition constraint would be invalid.
 
 The correct constraint for contemporaneous quotes is monotonicity: for ascending
 strikes k1 < k2 < ... < kn, P(X > k1) >= P(X > k2) >= ... >= P(X > kn).
@@ -16,9 +15,9 @@ two adjacent strikes is quote staleness. Alerts therefore require the magnitude
 to exceed the combined half-spread and to persist.
 
 CORRECTED 2026-09-07. The first implementation took each strike's most recent
-quote independently. Measured across 28 events, 12 had strike quotes spanning
-more than 24 hours (worst: 194h), so the control was comparing a strike quoted
-eight days ago against one quoted an hour ago. Quotes are now grouped by common
+quote independently. Measured across 28 events, 12 assembled ladders from quote
+timestamps spanning more than 24 hours (worst event span: 194h), and adjacent
+strikes could be separated by several days. Quotes are now grouped by common
 candle end period and only strikes present in that period are compared. This
 removes cross-period mismatches but does not reveal when each market's quote was
 last updated within the hour. It also makes

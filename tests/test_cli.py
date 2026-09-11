@@ -168,6 +168,33 @@ def test_custom_database_and_series_are_used_for_an_oos_run(conn, monkeypatch):
         ).fetchone()[0] == 1
 
 
+def test_full_ingest_replaces_stale_snapshot_rows(conn, monkeypatch):
+    params = {"version": "cli-replacement"}
+    register(conn, params)
+    _seed_snapshot(conn, "STALE")
+
+    def ingest_selected(target, _api, series):
+        _seed_snapshot(target, series)
+        return {"series": series, "markets": 1, "candles": 1}
+
+    monkeypatch.setattr(cli, "load_params", lambda _: params)
+    monkeypatch.setattr(cli, "connect", lambda _: conn)
+    monkeypatch.setattr(cli, "KalshiPublic", lambda: object())
+    monkeypatch.setattr(cli, "ingest_series", ingest_selected)
+    monkeypatch.setattr(cli, "build_events", lambda *_: 1)
+    monkeypatch.setattr(cli.c5_settlement, "build_inventory", lambda *_: 1)
+    monkeypatch.setattr(cli, "CONTROLS", [_StubControl])
+    monkeypatch.setattr(cli, "c1_coverage", lambda *_: {})
+    monkeypatch.setattr(cli, "c3_coverage", lambda *_: {})
+    monkeypatch.setattr(cli, "funnel_markdown", lambda *_: "")
+
+    assert cli.main(series=["FRESH"]) == 0
+    assert conn.execute(
+        "SELECT DISTINCT series_ticker FROM markets").fetchall() == [("FRESH",)]
+    assert conn.execute(
+        "SELECT COUNT(*) FROM trades WHERE ticker = 'STALE-T'").fetchone()[0] == 0
+
+
 def test_snapshot_validation_cannot_hide_a_candleless_requested_series(conn):
     _seed_snapshot(conn, "S1")
     _seed_snapshot(conn, "S2", include_candles=False)
