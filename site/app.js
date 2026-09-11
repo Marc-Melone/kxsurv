@@ -33,6 +33,20 @@ function score(v) {
   return String(rounded);
 }
 
+function isEpoch(v) {
+  var n = Number(v);
+  return Number.isFinite(n) && n > 1e9 && n < 4e9 && String(v).indexOf(".") === -1;
+}
+
+function asTime(v) {
+  return new Date(Number(v) * 1000).toISOString().replace("T", " ").replace(".000Z", "");
+}
+
+function stamp(iso) {
+  if (!iso) return "—";
+  return String(iso).slice(0, 19).replace("T", " ") + " UTC";
+}
+
 function shortHash(h) {
   return h ? String(h).slice(0, 16) + "…" : "—";
 }
@@ -59,8 +73,8 @@ function renderProvenance(doc) {
     ["Input fingerprint", run.input_hash],
     ["Code fingerprint", run.code_hash],
     ["Source commit", run.source_commit || "—"],
-    ["Started", run.started_at],
-    ["Finished", run.finished_at || "—"]
+    ["Started", stamp(run.started_at)],
+    ["Finished", stamp(run.finished_at)]
   ];
   var grid = document.getElementById("prov-grid");
   rows.forEach(function (row) {
@@ -278,8 +292,10 @@ function renderAlertList() {
 
     var r = el("div", "rationale");
     if (a.disposition) {
+      var text = a.disposition.rationale.replace(
+        /^(No action|Monitor|Escalated)\.\s*/i, "");
       r.appendChild(el("strong", null, ACTION_LABEL[action] + " — "));
-      r.appendChild(document.createTextNode(a.disposition.rationale));
+      r.appendChild(document.createTextNode(text));
     } else {
       r.appendChild(el("em", null,
         "Untriaged. Dispositions are scoped to a run; a prior run's review is not inherited."));
@@ -296,7 +312,15 @@ function renderAlertList() {
       if (pair[1] === null || pair[1] === undefined) return;
       var tr = el("tr");
       tr.appendChild(el("td", null, pair[0]));
-      tr.appendChild(el("td", null, typeof pair[1] === "number" ? score(pair[1]) : String(pair[1])));
+      var value;
+      if (isEpoch(pair[1]) && /(_ts|window_start|window_end)$/.test(pair[0])) {
+        value = asTime(pair[1]) + " UTC";
+      } else if (typeof pair[1] === "number") {
+        value = score(pair[1]);
+      } else {
+        value = String(pair[1]);
+      }
+      tr.appendChild(el("td", null, value));
       tb.appendChild(tr);
     });
     kv.appendChild(tb);
