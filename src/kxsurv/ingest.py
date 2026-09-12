@@ -30,7 +30,7 @@ def check_completeness(conn, ticker: str, tolerance_pct: float = 2.0):
     still score it, while C1 and C2 cannot and skip it.
     """
     first = conn.execute(
-        "SELECT MIN(created_time) FROM trades WHERE ticker = ?",
+        "SELECT MIN(created_time_us) FROM trades WHERE ticker = ?",
         (ticker,)).fetchone()[0]
 
     if first is None:
@@ -53,7 +53,7 @@ def check_completeness(conn, ticker: str, tolerance_pct: float = 2.0):
     cand = conn.execute(
         "SELECT COALESCE(SUM(volume_fp), 0) FROM candles"
         " WHERE ticker = ? AND end_period_ts >= ?",
-        (ticker, _to_unix(first))).fetchone()[0]
+        (ticker, (first + 999_999) // 1_000_000)).fetchone()[0]
     div = abs(tape - cand) / cand * 100.0 if cand else (0.0 if not tape else 100.0)
     ok = div <= tolerance_pct
     conn.execute(
@@ -65,15 +65,18 @@ def check_completeness(conn, ticker: str, tolerance_pct: float = 2.0):
     return ok, round(div, 4)
 
 
-def ingest_series(conn, api, series_ticker: str, days: int = 90) -> dict:
+def ingest_series(conn, api, series_ticker: str, days: int = 90,
+                  start_ts: int | None = None, end_ts: int | None = None) -> dict:
     """Ingest one series into an already reset bounded snapshot.
 
     ``api.markets`` returns both Kalshi storage tiers.  The list endpoints do
     not share a close-time filter, so enforce the requested acquisition window
     locally before making one tape/candle request per market.
     """
-    end_ts = int(time.time())
-    start_ts = end_ts - days * 86400
+    end_ts = int(time.time()) if end_ts is None else end_ts
+    start_ts = end_ts - days * 86400 if start_ts is None else start_ts
+    if start_ts >= end_ts:
+        raise ValueError("acquisition start must precede end")
     candidates = api.markets(series_ticker=series_ticker)
     mkts = []
     for market in candidates:

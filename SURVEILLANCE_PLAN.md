@@ -127,6 +127,12 @@ declare the same single valid hostname before alerting.
 
 ## Known validation limits
 
+The later reliability update adds exact timestamp ordering, strict numeric
+validation, and export drift checks without changing the registered thresholds.
+Use the [frozen evaluation protocol](EVALUATION.md) for subsequent data. New
+fixed acquisition bounds are recorded by its manifest; the published run 8
+remains the earlier saved-snapshot baseline.
+
 1. C1's effective unit is the distinct scheduled publication: the saved snapshot
    contains five such releases represented by nine settled ladders and 132
    settled markets. Ladders sharing a publication are not independent.

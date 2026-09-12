@@ -120,12 +120,16 @@ function renderFunnel(doc) {
   // With nothing triaged, "none escalated" is an absence of judgement, not a
   // judgement of absence.
   var note = "";
-  if (f.triaged === 0) {
+  if (f.generated === 0) {
+    note = "No candidates generated.";
+  } else if (f.triaged === 0) {
     note = "awaiting analyst triage";
   } else if (f.triaged < f.generated) {
     note = f.untriaged + " still awaiting review";
   } else if (f.escalated === 0) {
-    note = "every alert reviewed; none survived its innocent explanation";
+    note = "All " + num(f.generated) + " candidates reviewed: " +
+      num(f.no_action) + " closed, " + num(f.monitor) +
+      " retained for monitoring, none escalated.";
   }
   document.getElementById("funnel-note").textContent = note;
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 
 from .api import KalshiPublic
 from .controls import run_control
@@ -19,6 +20,7 @@ from .controls.c1_prerelease import coverage as c1_coverage
 from .controls.c3_oi_divergence import coverage as c3_coverage
 from .export import write_export
 from .report import funnel_markdown
+from .validation import timestamp_us
 
 SERIES = ["KXCPI", "KXCPIYOY", "KXPAYROLLS", "KXU3", "KXFED"]
 DEFAULT_DB_PATH = "out/kxsurv.db"
@@ -122,7 +124,20 @@ def _selected_series(series) -> list[str]:
 
 def main(skip_ingest: bool = False, register_params: bool = False,
          db_path: str = DEFAULT_DB_PATH, series=None,
-         export_path: str | None = None, export_run_id: int | None = None) -> int:
+         export_path: str | None = None, export_run_id: int | None = None,
+         start_time: str | None = None, end_time: str | None = None) -> int:
+    bounds = {}
+    if start_time is not None or end_time is not None:
+        if not start_time or not end_time:
+            raise ValueError("--start and --end must be supplied together")
+        if skip_ingest or register_params or export_path:
+            raise ValueError("--start/--end apply only to a new acquisition")
+        start_us, end_us = timestamp_us(start_time), timestamp_us(end_time)
+        if start_us % 3_600_000_000 or end_us % 3_600_000_000:
+            raise ValueError("acquisition bounds must align to whole UTC hours")
+        if start_us >= end_us or end_us > int(time.time()) * 1_000_000:
+            raise ValueError("acquisition must be a non-empty, completed interval")
+        bounds = {"start_ts": start_us // 1_000_000, "end_ts": end_us // 1_000_000}
     params = load_params("config/params.yaml")
     selected_series = _selected_series(series)
     conn = connect(db_path)
@@ -154,7 +169,7 @@ def main(skip_ingest: bool = False, register_params: bool = False,
             reset_snapshot_inputs(conn, refresh_token)
             api = KalshiPublic()
             for s in selected_series:
-                result = ingest_series(conn, api, s)
+                result = ingest_series(conn, api, s, **bounds)
                 print(result, flush=True)
                 if not isinstance(result, dict) or result.get("markets", 0) <= 0:
                     raise RuntimeError(
@@ -212,7 +227,10 @@ if __name__ == "__main__":
     parser.add_argument("--series", nargs="+", default=None, metavar="TICKER",
                         help="exact database series scope (ingested unless --skip-ingest) "
                              "(default: the five registered series)")
+    parser.add_argument("--start", help="fixed acquisition start (UTC hour, ISO 8601)")
+    parser.add_argument("--end", help="fixed acquisition end (UTC hour, ISO 8601)")
     args = parser.parse_args()
     sys.exit(main(skip_ingest=args.skip_ingest, register_params=args.register_params,
                   db_path=args.db, series=args.series,
-                  export_path=args.export, export_run_id=args.run))
+                  export_path=args.export, export_run_id=args.run,
+                  start_time=args.start, end_time=args.end))

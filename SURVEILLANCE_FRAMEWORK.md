@@ -2,6 +2,13 @@
 
 **Version 1.1.0 · corrective release · 2026-09-07 saved-snapshot re-analysis**
 
+The numerical results below describe the published run at source commit
+`6b11825`. The later [reliability update](docs/RELEASE_HISTORY.md) changes
+timestamp comparisons, numeric validation, and export checks; it has not been
+re-run against the unavailable original database. See [EVALUATION.md](EVALUATION.md)
+for the new frozen prospective workflow and [the case supplement](cases/CASE-0637-TAPE.md)
+for an independently retrieved reconciliation of one case's public summary.
+
 ---
 
 ## 1. Scope and posture
@@ -93,6 +100,20 @@ that predates this marker is labelled `legacy_ready` only after structural
 coverage checks; a new full ingest provides the stronger lifecycle evidence.
 
 ### Trade-tape completeness
+
+New trade rows retain the API timestamp text and an indexed integer UTC
+microsecond value. C1/C2 filter and order by that exact value. Existing local
+databases backfill it without rewriting original timestamp text; the added
+detector input changes the fingerprint, so migrate a copy if the original
+database fingerprint must be retained. Required numeric fields now fail on
+missing, malformed, non-finite, or out-of-range values. Valid zero-volume
+candles and absent optional quotes remain supported.
+
+Exports read one SQLite snapshot and require its input fingerprint and
+registered parameters to match the selected run. Re-ingested data cannot be
+used to recalculate an old run's corpus or coverage. When only code has drifted,
+the exporter retains the stored alerts, flags that drift, and omits coverage
+instead of computing the old denominator with a new implementation.
 
 The saved snapshot was collected from the live trade endpoint only and contains
 roughly 66 days of retrieved trades versus roughly 89 days of candles. A

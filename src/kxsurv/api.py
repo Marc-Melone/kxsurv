@@ -7,11 +7,13 @@ authenticated request, and places no order. The client uses a conservative
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import requests
 
 BASE = "https://external-api.kalshi.com/trade-api/v2"
+SUPPORTED_BASES = (BASE, "https://api.elections.kalshi.com/trade-api/v2")
 
 
 class RateLimiter:
@@ -30,7 +32,11 @@ class RateLimiter:
 
 
 class KalshiPublic:
-    def __init__(self, rate_per_sec: float = 10.0, max_attempts: int = 4):
+    def __init__(self, rate_per_sec: float = 10.0, max_attempts: int = 4,
+                 base_url: str | None = None):
+        self._base = (base_url or os.environ.get("KXSURV_API_BASE", BASE)).rstrip("/")
+        if self._base not in SUPPORTED_BASES:
+            raise ValueError("base_url must be a documented Kalshi production endpoint")
         self._session = requests.Session()
         self._rl = RateLimiter(rate_per_sec)
         self._max_attempts = max_attempts
@@ -38,7 +44,7 @@ class KalshiPublic:
     def _get(self, path: str, params: dict | None = None) -> dict:
         for attempt in range(self._max_attempts):
             self._rl.acquire()
-            r = self._session.get(BASE + path, params=params, timeout=30)
+            r = self._session.get(self._base + path, params=params, timeout=30)
             if r.status_code == 429 or r.status_code >= 500:
                 time.sleep(1.0 * (2 ** attempt))   # bounded exponential backoff
                 continue

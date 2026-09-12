@@ -11,7 +11,7 @@ from .params import params_hash, verify
 
 
 _SNAPSHOT_TABLES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
-    ("trades", ("trade_id", "ticker", "created_time", "count_fp", "yes_price",
+    ("trades", ("trade_id", "ticker", "created_time", "created_time_us", "count_fp", "yes_price",
                 "no_price", "taker_outcome_side", "taker_book_side", "is_block_trade"),
      ("trade_id",)),
     ("candles", ("ticker", "end_period_ts", "volume_fp", "open_interest_fp",

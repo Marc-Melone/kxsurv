@@ -15,6 +15,7 @@ from decimal import Decimal
 
 from . import Alert
 from .c1_prerelease import _iso, _parse, taker_outcome_side
+from ..validation import timestamp_us
 
 CONTROL_ID = "C2"
 
@@ -54,9 +55,9 @@ def run(conn, params: dict) -> list[Alert]:
         halt = _parse(close_str)
         window = conn.execute(
             "SELECT count_fp, taker_outcome_side, yes_price, created_time FROM trades"
-            " WHERE ticker = ? AND created_time >= ? AND created_time < ?"
-            " ORDER BY created_time ASC",
-            (ticker, _iso(halt - N), _iso(halt))).fetchall()
+            " WHERE ticker = ? AND created_time_us >= ? AND created_time_us < ?"
+            " ORDER BY created_time_us ASC, trade_id ASC",
+            (ticker, timestamp_us(halt - N), timestamp_us(halt))).fetchall()
         if len(window) < 2:
             continue
 

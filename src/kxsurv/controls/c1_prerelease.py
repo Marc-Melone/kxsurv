@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 
 from . import Alert, percentile_of
 from ..events import ladder
+from ..validation import timestamp_us
 
 CONTROL_ID = "C1"
 
@@ -89,8 +90,9 @@ def _trades_between(conn, ticker: str, start: datetime, end: datetime) -> list[d
     """
     cur = conn.execute(
         "SELECT count_fp, taker_outcome_side, yes_price FROM trades WHERE ticker = ?"
-        " AND created_time >= ? AND created_time < ?",
-        (ticker, _iso(start), _iso(end)))
+        " AND created_time_us >= ? AND created_time_us < ?"
+        " ORDER BY created_time_us, trade_id",
+        (ticker, timestamp_us(start), timestamp_us(end)))
     return [{"count_fp": r[0], "taker_outcome_side": r[1], "yes_price": r[2]}
             for r in cur.fetchall()]
 
@@ -104,9 +106,9 @@ def _mid_at(conn, ticker: str, when: datetime) -> float | None:
     if row:
         return (row[0] + row[1]) / 2.0
     last = conn.execute(
-        "SELECT yes_price FROM trades WHERE ticker = ? AND created_time <= ?"
-        " ORDER BY created_time DESC LIMIT 1",
-        (ticker, _iso(when))).fetchone()
+        "SELECT yes_price FROM trades WHERE ticker = ? AND created_time_us <= ?"
+        " ORDER BY created_time_us DESC, trade_id DESC LIMIT 1",
+        (ticker, timestamp_us(when))).fetchone()
     return last[0] if last else None
 
 

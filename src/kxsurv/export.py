@@ -20,7 +20,8 @@ import subprocess
 from datetime import datetime, timezone
 
 from .controls import ESCALATION_LANGUAGE
-from .runs import code_hash, latest_run_id
+from .params import params_hash
+from .runs import code_hash, input_hash, latest_run_id, verify_snapshot_ready
 from .triage import funnel
 
 EXPORT_SCHEMA = 1
@@ -133,6 +134,21 @@ def export_run(conn, run_id: int | None = None, params: dict | None = None,
     silently describes an unfinished run is the defect this module exists to
     prevent.
     """
+    # A read transaction keeps the fingerprint, counts, coverage, and
+    # dispositions on one SQLite snapshot even if another process refreshes it.
+    # A savepoint also works when the caller already owns a transaction.
+    conn.execute("SAVEPOINT export_snapshot")
+    try:
+        doc = _export_run(conn, run_id, params, source_commit)
+    except Exception:
+        conn.execute("ROLLBACK TO export_snapshot")
+        conn.execute("RELEASE export_snapshot")
+        raise
+    conn.execute("RELEASE export_snapshot")
+    return doc
+
+
+def _export_run(conn, run_id, params, source_commit) -> dict:
     if run_id is None:
         run_id = latest_run_id(conn)
         if run_id is None:
@@ -150,9 +166,29 @@ def export_run(conn, run_id: int | None = None, params: dict | None = None,
             "refusing to export run {}: status is {!r}, not complete"
             .format(run_id, row[1]))
 
+    try:
+        verify_snapshot_ready(conn)
+    except RuntimeError as exc:
+        raise ExportError("refusing export: snapshot is not ready") from exc
+    if input_hash(conn) != row[3]:
+        raise ExportError(
+            "refusing to export run {}: current inputs do not match its fingerprint; "
+            "use its already published artifact or restore the original snapshot"
+            .format(run_id))
+    registration = conn.execute(
+        "SELECT version, content FROM params WHERE params_hash = ?", (row[2],)).fetchone()
+    if registration is None:
+        raise ExportError("run has no registered parameter record")
+    registered = json.loads(registration[1])
+    if params_hash(registered) != row[2]:
+        raise ExportError("registered parameter content does not match the run")
+    if params is not None and params_hash(params) != row[2]:
+        raise ExportError("supplied parameters do not match the selected run")
+
     current_code = code_hash()
-    version = conn.execute(
-        "SELECT version FROM params WHERE params_hash = ?", (row[2],)).fetchone()
+    # Coverage is derived by executing code. When that code has changed, it
+    # cannot reconstruct the old run's denominator; omit it explicitly.
+    coverage = _coverage(conn, registered) if row[4] == current_code else {}
 
     if source_commit is None:
         source_commit, source_dirty = _source_commit()
@@ -180,7 +216,7 @@ def export_run(conn, run_id: int | None = None, params: dict | None = None,
         "run": {
             "run_id": row[0],
             "status": row[1],
-            "params_version": version[0] if version else None,
+            "params_version": registration[0],
             "params_hash": row[2],
             "input_hash": row[3],
             "code_hash": row[4],
@@ -196,7 +232,7 @@ def export_run(conn, run_id: int | None = None, params: dict | None = None,
         "corpus": corpus,
         "executions": executions,
         "funnel": funnel(conn, run_id),
-        "coverage": _coverage(conn, params),
+        "coverage": coverage,
         "controls": CONTROLS,
         "alerts": _alerts(conn, run_id),
         "disclaimer": DISCLAIMER,
